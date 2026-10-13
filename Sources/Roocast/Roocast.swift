@@ -37,27 +37,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.navigationState.moveDown()
             }
         }
-        panel?.onEnter = { [weak self] in
+        panel?.onEnter = {
             Task { @MainActor in
                 NotificationCenter.default.post(name: .launchSelectedApp, object: nil)
             }
-        }
-        
-        // Listen for arrow key notifications from custom TextField
-        NotificationCenter.default.addObserver(
-            forName: .arrowUpPressed,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.navigationState.moveUp()
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .arrowDownPressed,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.navigationState.moveDown()
         }
     }
 

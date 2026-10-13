@@ -8,6 +8,12 @@ struct ContentView: View {
     @FocusState private var isSearchFocused: Bool
     let onDismiss: () -> Void
 
+    private enum Layout {
+        static let width: CGFloat = 860
+        static let height: CGFloat = 560
+        static let cornerRadius: CGFloat = 12
+    }
+
     var filteredApps: [AppItem] {
         guard !query.isEmpty else { return [] }
         return appIndex.search(query)
@@ -84,30 +90,34 @@ struct ContentView: View {
                     .padding(.bottom, 8)
             }
         }
-        .frame(width: 860, height: 560)
+        .frame(width: Layout.width, height: Layout.height)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: Layout.cornerRadius, style: .continuous)
                 .fill(.thickMaterial)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius, style: .continuous))
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 isSearchFocused = true
             }
             
             // Listen for launch notification
-            NotificationCenter.default.addObserver(forName: .launchSelectedApp, object: nil, queue: .main) { _ in
+            NotificationCenter.default.addObserver(
+                forName: .launchSelectedApp,
+                object: nil,
+                queue: .main
+            ) { _ in
                 self.launchSelectedApp()
             }
         }
-        .onChange(of: query) { oldValue, newValue in
+        .onChange(of: query) { _, _ in
             navigationState.reset()
             navigationState.maxIndex = max(0, filteredApps.count - 1)
         }
         .environmentObject(navigationState)
     }
 
-    func launchSelectedApp() {
+    private func launchSelectedApp() {
         guard !filteredApps.isEmpty else { return }
         guard navigationState.selectedIndex < filteredApps.count else { return }
         

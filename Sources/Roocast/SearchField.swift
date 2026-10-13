@@ -13,8 +13,6 @@ struct SearchField: NSViewRepresentable {
         textField.backgroundColor = .clear
         textField.focusRingType = .none
         textField.delegate = context.coordinator
-        textField.target = context.coordinator
-        textField.action = #selector(Coordinator.textChanged(_:))
         textField.onArrowUp = {
             NotificationCenter.default.post(name: .arrowUpPressed, object: nil)
         }
@@ -40,10 +38,6 @@ struct SearchField: NSViewRepresentable {
         
         init(_ parent: SearchField) {
             self.parent = parent
-        }
-        
-        @objc func textChanged(_ sender: NSTextField) {
-            parent.text = sender.stringValue
         }
         
         func controlTextDidChange(_ obj: Notification) {
