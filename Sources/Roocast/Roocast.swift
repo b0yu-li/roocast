@@ -14,9 +14,11 @@ struct Roocast {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: LauncherPanel?
+    private var hotKeyManager: HotKeyManager?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupPanel()
+        setupHotKey()
         showPanel()
     }
 
@@ -24,7 +26,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel = LauncherPanel()
     }
 
-    func showPanel() {
+    private func setupHotKey() {
+        hotKeyManager = HotKeyManager { [weak self] in
+            self?.togglePanel()
+        }
+    }
+
+    private func togglePanel() {
+        guard let panel else { return }
+        if panel.isVisible {
+            panel.orderOut(nil)
+        } else {
+            panel.show()
+        }
+    }
+
+    private func showPanel() {
         guard let panel else { return }
         panel.show()
     }

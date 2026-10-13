@@ -40,33 +40,44 @@ struct ContentView: View {
             Divider()
 
             // Results area
-            ScrollView {
-                LazyVStack(spacing: 2) {
-                    if query.isEmpty {
-                        VStack(spacing: 8) {
-                            Image(systemName: "keyboard")
-                                .font(.system(size: 28, weight: .light))
-                                .foregroundStyle(.tertiary)
-                            Text("Start typing to search…")
+            ZStack(alignment: .bottomTrailing) {
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        if query.isEmpty {
+                            VStack(spacing: 8) {
+                                Image(systemName: "keyboard")
+                                    .font(.system(size: 28, weight: .light))
+                                    .foregroundStyle(.tertiary)
+                                Text("Start typing to search…")
+                                    .font(.system(size: 15))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.top, 60)
+                        } else if filteredApps.isEmpty {
+                            Text("No results")
                                 .font(.system(size: 15))
                                 .foregroundStyle(.tertiary)
-                        }
-                        .padding(.top, 60)
-                    } else if filteredApps.isEmpty {
-                        Text("No results")
-                            .font(.system(size: 15))
-                            .foregroundStyle(.tertiary)
-                            .padding(.top, 40)
-                    } else {
-                        ForEach(filteredApps) { app in
-                            AppRow(app: app)
+                                .padding(.top, 40)
+                        } else {
+                            ForEach(filteredApps) { app in
+                                AppRow(app: app)
+                            }
                         }
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                
+                // Version badge
+                Text("v\(AppVersion.string)")
+                    .font(.system(size: 10, weight: .light))
+                    .foregroundStyle(.quaternary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .padding(.trailing, 12)
+                    .padding(.bottom, 8)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(width: 860, height: 560) // Fill the full panel
         .background(
