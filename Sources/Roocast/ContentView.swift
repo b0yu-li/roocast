@@ -3,6 +3,7 @@ import AppKit
 
 struct ContentView: View {
     @State private var query = ""
+    @ObservedObject var navigationState: NavigationState
     @StateObject private var appIndex = AppIndex()
     @FocusState private var isSearchFocused: Bool
     let onDismiss: () -> Void
@@ -20,10 +21,10 @@ struct ContentView: View {
                     .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(isSearchFocused ? Color.accentColor : .secondary)
 
-                TextField("Search apps, files, commands…", text: $query)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 24, weight: .regular))
-                    .focused($isSearchFocused)
+                SearchField(text: $query, onSubmit: {
+                    launchSelectedApp()
+                })
+                .frame(height: 40)
 
                 if !query.isEmpty {
                     Button(action: { query = "" }) {
@@ -59,8 +60,12 @@ struct ContentView: View {
                                 .foregroundStyle(.tertiary)
                                 .padding(.top, 40)
                         } else {
-                            ForEach(filteredApps) { app in
-                                AppRow(app: app)
+                            ForEach(Array(filteredApps.enumerated()), id: \.element.id) { index, app in
+                                AppRow(app: app, isSelected: index == navigationState.selectedIndex)
+                                    .onTapGesture {
+                                        navigationState.selectedIndex = index
+                                        launchSelectedApp()
+                                    }
                             }
                         }
                     }
@@ -79,17 +84,44 @@ struct ContentView: View {
                     .padding(.bottom, 8)
             }
         }
-        .frame(width: 860, height: 560) // Fill the full panel
+        .frame(width: 860, height: 560)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(.thickMaterial)
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                isSearchFocused = true
+            }
+            
+            // Listen for launch notification
+            NotificationCenter.default.addObserver(forName: .launchSelectedApp, object: nil, queue: .main) { _ in
+                self.launchSelectedApp()
+            }
+        }
+        .onChange(of: query) { oldValue, newValue in
+            navigationState.reset()
+            navigationState.maxIndex = max(0, filteredApps.count - 1)
+        }
+        .environmentObject(navigationState)
+    }
+
+    func launchSelectedApp() {
+        guard !filteredApps.isEmpty else { return }
+        guard navigationState.selectedIndex < filteredApps.count else { return }
+        
+        let app = filteredApps[navigationState.selectedIndex]
+        if let url = URL(string: "file://\(app.path)") {
+            NSWorkspace.shared.open(url)
+            onDismiss()
+        }
     }
 }
 
 struct AppRow: View {
     let app: AppItem
+    let isSelected: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -107,10 +139,10 @@ struct AppRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(app.name)
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(isSelected ? Color.white : Color.primary)
                 Text(app.path)
                     .font(.system(size: 12))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(isSelected ? Color.white.opacity(0.7) : Color.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
@@ -121,7 +153,7 @@ struct AppRow: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(Color.primary.opacity(0.04))
+                .fill(isSelected ? Color.accentColor : Color.primary.opacity(0.04))
         )
     }
 }
