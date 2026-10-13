@@ -4,11 +4,18 @@ import AppKit
 final class LauncherPanel: NSPanel {
     private let panelWidth: CGFloat = 860
     private let panelHeight: CGFloat = 560
+    
+    var onArrowUp: (() -> Void)?
+    var onArrowDown: (() -> Void)?
+    var onEnter: (() -> Void)?
+    let navigationState: NavigationState
 
-    init() {
+    init(navigationState: NavigationState) {
+        self.navigationState = navigationState
+        
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight),
-            styleMask: [.borderless, .nonactivatingPanel],
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
@@ -30,9 +37,12 @@ final class LauncherPanel: NSPanel {
         }
 
         // SwiftUI content
-        let contentView = ContentView(onDismiss: { [weak self] in
-            self?.orderOut(nil)
-        })
+        let contentView = ContentView(
+            navigationState: navigationState,
+            onDismiss: { [weak self] in
+                self?.orderOut(nil)
+            }
+        )
         contentViewController = NSHostingController(rootView: contentView)
     }
 
@@ -40,17 +50,32 @@ final class LauncherPanel: NSPanel {
     override var canBecomeMain: Bool { true }
 
     func show() {
-        // Ensure panel is the correct size
         setContentSize(NSSize(width: panelWidth, height: panelHeight))
         makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { // Escape
-            orderOut(nil)
-        } else {
-            super.keyDown(with: event)
+    // Intercept events BEFORE they reach any view (including TextField)
+    override func sendEvent(_ event: NSEvent) {
+        // Handle both keyDown (10) and keyUp (11) to catch arrow keys
+        if event.type == .keyDown || event.type == .keyUp {
+            switch event.keyCode {
+            case 126:
+                onArrowUp?()
+                return
+            case 125:
+                onArrowDown?()
+                return
+            case 36:
+                onEnter?()
+                return
+            case 53:
+                orderOut(nil)
+                return
+            default:
+                break
+            }
         }
+        super.sendEvent(event)
     }
 }

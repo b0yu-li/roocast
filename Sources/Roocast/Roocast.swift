@@ -15,6 +15,7 @@ struct Roocast {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: LauncherPanel?
     private var hotKeyManager: HotKeyManager?
+    private var navigationState = NavigationState()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupPanel()
@@ -23,7 +24,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupPanel() {
-        panel = LauncherPanel()
+        panel = LauncherPanel(navigationState: navigationState)
+        
+        // Wire up arrow key handlers from panel's sendEvent
+        panel?.onArrowUp = { [weak self] in
+            Task { @MainActor in
+                self?.navigationState.moveUp()
+            }
+        }
+        panel?.onArrowDown = { [weak self] in
+            Task { @MainActor in
+                self?.navigationState.moveDown()
+            }
+        }
+        panel?.onEnter = { [weak self] in
+            Task { @MainActor in
+                NotificationCenter.default.post(name: .launchSelectedApp, object: nil)
+            }
+        }
+        
+        // Listen for arrow key notifications from custom TextField
+        NotificationCenter.default.addObserver(
+            forName: .arrowUpPressed,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.navigationState.moveUp()
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: .arrowDownPressed,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.navigationState.moveDown()
+        }
     }
 
     private func setupHotKey() {
@@ -45,4 +80,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let panel else { return }
         panel.show()
     }
+}
+
+extension Notification.Name {
+    static let launchSelectedApp = Notification.Name("launchSelectedApp")
 }

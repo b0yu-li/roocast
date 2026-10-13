@@ -4,6 +4,20 @@
 
 ---
 
+## Development Rules
+
+### NO VIBE CHECKING
+
+**When debugging, NEVER guess or assume. ALWAYS:**
+1. Add logging to see what's actually happening
+2. Read the code to understand the data flow
+3. Test with concrete evidence, not assumptions
+4. If something doesn't work, trace it from the source
+
+**Never say "it should work" without proof. Show the logs.**
+
+---
+
 ## Mission
 
 Replace Raycast with a **native macOS app** that delivers instant responsiveness while consuming fewer resources than the apps it launches. Roocast exists because a launcher should never itself be the thing slowing you down.
