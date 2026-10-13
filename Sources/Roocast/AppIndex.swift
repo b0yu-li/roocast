@@ -42,7 +42,7 @@ final class AppIndex: ObservableObject {
             guard let enumerator = FileManager.default.enumerator(
                 at: baseURL,
                 includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
             ) else { continue }
 
             while let fileURL = enumerator.nextObject() as? URL {
