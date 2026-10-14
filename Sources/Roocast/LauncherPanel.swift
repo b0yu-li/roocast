@@ -57,8 +57,8 @@ final class LauncherPanel: NSPanel {
 
     // Intercept events BEFORE they reach any view (including TextField)
     override func sendEvent(_ event: NSEvent) {
-        // Handle both keyDown (10) and keyUp (11) to catch arrow keys
-        if event.type == .keyDown || event.type == .keyUp {
+        // Only handle keyDown (not keyUp) to avoid double-firing
+        if event.type == .keyDown {
             switch event.keyCode {
             case 126:
                 onArrowUp?()
