@@ -122,9 +122,34 @@ struct ContentView: View {
         guard navigationState.selectedIndex < filteredApps.count else { return }
         
         let app = filteredApps[navigationState.selectedIndex]
-        if let url = URL(string: "file://\(app.path)") {
-            NSWorkspace.shared.open(url)
-            onDismiss()
+        
+        // If this is a Firefox profile, launch with -P argument
+        if let profile = app.profile {
+            launchFirefoxWithProfile(profile: profile, appPath: app.path)
+        } else {
+            // Standard launch
+            if let url = URL(string: "file://\(app.path)") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+        
+        onDismiss()
+    }
+    
+    private func launchFirefoxWithProfile(profile: String, appPath: String) {
+        let firefoxBinary = appPath + "/Contents/MacOS/firefox"
+        
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: firefoxBinary)
+        task.arguments = ["-P", profile, "-foreground"]
+        
+        do {
+            try task.run()
+        } catch {
+            // Fallback to standard launch if profile launch fails
+            if let url = URL(string: "file://\(appPath)") {
+                NSWorkspace.shared.open(url)
+            }
         }
     }
 }
@@ -163,11 +188,19 @@ struct AppRow: View {
                 Text(app.name)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(isSelected ? Color.white : Color.primary)
-                Text(app.path)
-                    .font(.system(size: 12))
-                    .foregroundStyle(isSelected ? Color.white.opacity(0.7) : Color.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                
+                // Show profile name if available, otherwise show path
+                if let profile = app.profile {
+                    Text(profile)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.8) : Color.accentColor)
+                } else {
+                    Text(app.path)
+                        .font(.system(size: 12))
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.7) : Color.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
 
             Spacer()
