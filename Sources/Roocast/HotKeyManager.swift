@@ -1,10 +1,32 @@
 import Carbon
 import AppKit
 
+// Global event handler for hotkey (cannot be a closure due to C function pointer requirement)
+private func hotKeyEventHandler(_: EventHandlerCallRef?, _ event: EventRef?, _: UnsafeMutableRawPointer?) -> OSStatus {
+    guard let event = event else { return OSStatus(eventNotHandledErr) }
+    
+    var hotKeyID = EventHotKeyID()
+    GetEventParameter(
+        event,
+        EventParamType(kEventParamDirectObject),
+        EventParamType(typeEventHotKeyID),
+        nil,
+        MemoryLayout<EventHotKeyID>.size,
+        nil,
+        &hotKeyID
+    )
+    
+    if hotKeyID.id == 1 {
+        HotKeyManager.activeManager?.onToggle()
+    }
+    
+    return noErr
+}
+
 final class HotKeyManager {
     private var hotKeyRef: EventHotKeyRef?
-    private let onToggle: () -> Void
-    private static var activeManager: HotKeyManager?
+    let onToggle: () -> Void
+    static var activeManager: HotKeyManager?
     
     init(onToggle: @escaping () -> Void) {
         self.onToggle = onToggle
@@ -30,26 +52,7 @@ final class HotKeyManager {
         // Install event handler
         InstallEventHandler(
             GetApplicationEventTarget(),
-            { _, event, _ -> OSStatus in
-                guard let event = event else { return OSStatus(eventNotHandledErr) }
-                
-                var hotKeyID = EventHotKeyID()
-                GetEventParameter(
-                    event,
-                    EventParamType(kEventParamDirectObject),
-                    EventParamType(typeEventHotKeyID),
-                    nil,
-                    MemoryLayout<EventHotKeyID>.size,
-                    nil,
-                    &hotKeyID
-                )
-                
-                if hotKeyID.id == 1 {
-                    HotKeyManager.activeManager?.onToggle()
-                }
-                
-                return noErr
-            },
+            hotKeyEventHandler,
             1,
             [eventType],
             nil,

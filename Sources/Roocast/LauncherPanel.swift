@@ -17,7 +17,7 @@ final class LauncherPanel: NSPanel {
             contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight),
             styleMask: [.borderless],
             backing: .buffered,
-            defer: false
+            defer: true
         )
 
         isOpaque = false

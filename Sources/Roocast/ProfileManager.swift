@@ -14,12 +14,16 @@ struct ProfileManager {
         let profilesPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/Firefox/profiles.ini")
         
-        guard let data = try? Data(contentsOf: profilesPath),
-              let content = String(data: data, encoding: .utf8) else {
+        do {
+            let data = try Data(contentsOf: profilesPath)
+            guard let content = String(data: data, encoding: .utf8) else {
+                return []
+            }
+            return parseProfilesINI(content)
+        } catch {
+            // File doesn't exist or can't be read - return empty array
             return []
         }
-        
-        return parseProfilesINI(content)
     }
     
     private static func parseProfilesINI(_ content: String) -> [FirefoxProfile] {
@@ -115,7 +119,7 @@ struct ProfileManager {
             }
         }
         
-        // Method 2: Scan processes (fallback)
+        // Method 2: Scan processes (fallback) - with timeout to prevent hanging
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/ps")
         task.arguments = ["aux"]
@@ -126,23 +130,38 @@ struct ProfileManager {
         
         do {
             try task.run()
-            task.waitUntilExit()
             
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8) {
-                // Look for -profile arguments in process list
-                let lines = output.components(separatedBy: .newlines)
-                for line in lines {
-                    if let range = line.range(of: "-profile ") {
-                        let afterProfile = line[range.upperBound...]
-                        if let spaceRange = afterProfile.range(of: " ") {
-                            let profilePath = String(afterProfile[afterProfile.startIndex..<spaceRange.lowerBound])
-                            profilePaths.insert(profilePath)
-                        } else {
-                            profilePaths.insert(String(afterProfile))
+            // Wait with timeout (2 seconds max) using DispatchQueue
+            let group = DispatchGroup()
+            group.enter()
+            
+            DispatchQueue.global().async {
+                task.waitUntilExit()
+                group.leave()
+            }
+            
+            let timeoutResult = group.wait(timeout: .now() + 2.0)
+            
+            if timeoutResult == .success {
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                if let output = String(data: data, encoding: .utf8) {
+                    // Look for -profile arguments in process list
+                    let lines = output.components(separatedBy: .newlines)
+                    for line in lines {
+                        if let range = line.range(of: "-profile ") {
+                            let afterProfile = line[range.upperBound...]
+                            if let spaceRange = afterProfile.range(of: " ") {
+                                let profilePath = String(afterProfile[afterProfile.startIndex..<spaceRange.lowerBound])
+                                profilePaths.insert(profilePath)
+                            } else {
+                                profilePaths.insert(String(afterProfile))
+                            }
                         }
                     }
                 }
+            } else {
+                // Timeout - kill the process
+                task.terminate()
             }
         } catch {
             // Process scanning failed, rely on lock files only
