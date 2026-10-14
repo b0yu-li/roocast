@@ -6,13 +6,15 @@ struct AppItem: Identifiable, Hashable {
     let name: String
     let path: String
     let icon: NSImage?
+    let isRunning: Bool
 
-    init(url: URL) {
+    init(url: URL, isRunning: Bool = false) {
         self.id = UUID()
         self.name = url.deletingPathExtension().lastPathComponent
         self.path = url.path
         self.icon = NSWorkspace.shared.icon(forFile: url.path)
         self.icon?.size = NSSize(width: 32, height: 32)
+        self.isRunning = isRunning
     }
 }
 
@@ -31,6 +33,10 @@ final class AppIndex: ObservableObject {
 
     private static func scanApps() -> [AppItem] {
         var found: [AppItem] = []
+        
+        // Get list of running app bundle paths
+        let runningApps = NSWorkspace.shared.runningApplications
+        let runningBundlePaths = Set(runningApps.compactMap { $0.bundleURL?.path })
 
         let searchPaths = [
             URL(fileURLWithPath: "/Applications"),
@@ -47,7 +53,8 @@ final class AppIndex: ObservableObject {
 
             while let fileURL = enumerator.nextObject() as? URL {
                 if fileURL.pathExtension == "app" {
-                    found.append(AppItem(url: fileURL))
+                    let isRunning = runningBundlePaths.contains(fileURL.path)
+                    found.append(AppItem(url: fileURL, isRunning: isRunning))
                 }
             }
         }
