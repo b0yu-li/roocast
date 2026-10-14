@@ -135,15 +135,28 @@ struct AppRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            if let icon = app.icon {
-                Image(nsImage: icon)
-                    .resizable()
-                    .frame(width: 32, height: 32)
-            } else {
-                Image(systemName: "app.dashed")
-                    .font(.system(size: 24))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 32, height: 32)
+            VStack(spacing: 4) {
+                if let icon = app.icon {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .frame(width: 32, height: 32)
+                } else {
+                    Image(systemName: "app.dashed")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 32, height: 32)
+                }
+                
+                // Running indicator dot
+                if app.isRunning {
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: 4, height: 4)
+                } else {
+                    Circle()
+                        .fill(Color.clear)
+                        .frame(width: 4, height: 4)
+                }
             }
 
             VStack(alignment: .leading, spacing: 2) {
