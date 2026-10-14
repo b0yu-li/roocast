@@ -123,9 +123,9 @@ struct ContentView: View {
         
         let app = filteredApps[navigationState.selectedIndex]
         
-        // If this is a Firefox profile, launch with -P argument
+        // If this is a Firefox profile, handle profile-specific launch
         if let profile = app.profile {
-            launchFirefoxWithProfile(profile: profile, appPath: app.path)
+            AppLauncher.launchFirefoxProfile(profile: profile, appPath: app.path)
         } else {
             // Standard launch
             if let url = URL(string: "file://\(app.path)") {
@@ -134,23 +134,6 @@ struct ContentView: View {
         }
         
         onDismiss()
-    }
-    
-    private func launchFirefoxWithProfile(profile: String, appPath: String) {
-        let firefoxBinary = appPath + "/Contents/MacOS/firefox"
-        
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: firefoxBinary)
-        task.arguments = ["-P", profile, "-foreground"]
-        
-        do {
-            try task.run()
-        } catch {
-            // Fallback to standard launch if profile launch fails
-            if let url = URL(string: "file://\(appPath)") {
-                NSWorkspace.shared.open(url)
-            }
-        }
     }
 }
 
