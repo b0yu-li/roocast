@@ -74,6 +74,9 @@ struct AppItem: Identifiable, Hashable {
 @MainActor
 final class AppIndex: ObservableObject {
     @Published private var apps: [AppItem] = []
+    /// Coalesce overlapping refreshes (init + panel-show) so flock probes never race.
+    private var isIndexing = false
+    private var needsReindex = false
 
     init() {
         // Index off the critical path so panel creation never blocks on disk I/O.
@@ -81,10 +84,20 @@ final class AppIndex: ObservableObject {
     }
 
     func indexApps() async {
-        let found = await Task.detached(priority: .userInitiated) {
-            Self.scanApps()
-        }.value
-        self.apps = found
+        if isIndexing {
+            needsReindex = true
+            return
+        }
+        isIndexing = true
+        defer { isIndexing = false }
+
+        repeat {
+            needsReindex = false
+            let found = await Task.detached(priority: .userInitiated) {
+                Self.scanApps()
+            }.value
+            self.apps = found
+        } while needsReindex
     }
 
     private nonisolated static func scanApps() -> [AppItem] {
@@ -94,9 +107,10 @@ final class AppIndex: ObservableObject {
         let runningApps = NSWorkspace.shared.runningApplications
         let runningBundlePaths = Set(runningApps.compactMap { $0.bundleURL?.path })
         
-        // Detect Firefox profiles
+        // Detect Firefox profiles once; running state uses the same list (no double detect).
         let firefoxProfiles = ProfileManager.detectFirefoxProfiles()
-        let runningFirefoxProfiles = ProfileManager.detectRunningProfiles()
+        let runningFirefoxProfiles = ProfileManager.detectRunningProfiles(among: firefoxProfiles)
+        var emittedFirefox = false
 
         let searchPaths = [
             URL(fileURLWithPath: "/Applications"),
@@ -116,10 +130,17 @@ final class AppIndex: ObservableObject {
                     let isRunning = runningBundlePaths.contains(fileURL.path)
                     
                     // Check if this is Firefox with profiles
-                    if fileURL.lastPathComponent == "Firefox.app" && !firefoxProfiles.isEmpty {
-                        // Create separate AppItem for each profile
+                    if fileURL.lastPathComponent == "Firefox.app", !firefoxProfiles.isEmpty {
+                        // One Firefox.app on disk is enough — avoid duplicating profile rows
+                        // if the bundle appears under multiple search roots.
+                        guard !emittedFirefox else { continue }
+                        emittedFirefox = true
                         for profile in firefoxProfiles {
+                            // Defense in depth: never list stub folders (no prefs, not running).
                             let profileIsRunning = runningFirefoxProfiles[profile.name] != nil
+                            guard ProfileManager.hasPrefsJS(at: profile.path) || profileIsRunning else {
+                                continue
+                            }
                             found.append(AppItem(
                                 url: fileURL,
                                 isRunning: profileIsRunning,
