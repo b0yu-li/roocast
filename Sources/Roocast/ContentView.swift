@@ -70,6 +70,8 @@ struct ContentView: View {
                             }
                         }
                     }
+                    // Reindex must not animate rows into a new order (reads as a sudden jump).
+                    .transaction { $0.animation = nil }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
                 }
@@ -111,9 +113,12 @@ struct ContentView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .launcherWillShow)) { _ in
+            // Reset selection immediately; after reindex only refresh bounds so ↑/↓
+            // during the scan is not yanked back to row 0.
+            syncNavigation()
             Task {
                 await appIndex.indexApps()
-                syncNavigation()
+                updateNavigationBounds()
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 isSearchFocused = true

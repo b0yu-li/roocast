@@ -18,7 +18,8 @@ struct AppItem: Identifiable, Hashable {
     let kind: Kind
 
     init(url: URL, isRunning: Bool = false, profile: String? = nil) {
-        self.id = UUID()
+        // Stable across reindex — random UUIDs made ForEach tear down every row on summon.
+        self.id = Self.stableID(path: url.path, profile: profile)
         self.name = url.deletingPathExtension().lastPathComponent
         self.path = url.path
         self.icon = NSWorkspace.shared.icon(forFile: url.path)
@@ -27,6 +28,37 @@ struct AppItem: Identifiable, Hashable {
         self.profile = profile
         self.aliases = []
         self.kind = .app
+    }
+
+    /// Name-based id so the same bundle (+ profile) keeps SwiftUI identity after rescans.
+    nonisolated static func stableID(path: String, profile: String? = nil) -> UUID {
+        let name = profile.map { "roocast.app:\(path)#\($0)" } ?? "roocast.app:\(path)"
+        return nameBasedUUID(name)
+    }
+
+    /// Deterministic UUID from a string (v5-shaped bits). Not cryptographic — UI identity only.
+    nonisolated private static func nameBasedUUID(_ name: String) -> UUID {
+        var hash: [UInt8] = [
+            0x6c, 0x25, 0x19, 0x7b, 0x52, 0x1e, 0x43, 0x0a,
+            0x9c, 0xd4, 0x2f, 0x81, 0xb6, 0x03, 0xe7, 0x55,
+        ]
+        for byte in name.utf8 {
+            hash[0] ^= byte
+            var carry: UInt16 = 0
+            for i in 0..<16 {
+                let mixed = UInt16(hash[i]) &* 167 &+ carry &+ UInt16(byte)
+                hash[i] = UInt8(truncatingIfNeeded: mixed)
+                carry = mixed >> 8
+            }
+        }
+        hash[6] = (hash[6] & 0x0f) | 0x50 // version 5
+        hash[8] = (hash[8] & 0x3f) | 0x80 // RFC 4122 variant
+        return UUID(uuid: (
+            hash[0], hash[1], hash[2], hash[3],
+            hash[4], hash[5], hash[6], hash[7],
+            hash[8], hash[9], hash[10], hash[11],
+            hash[12], hash[13], hash[14], hash[15]
+        ))
     }
 
     private init(
@@ -92,7 +124,7 @@ struct AppItem: Identifiable, Hashable {
         isRunning: Bool = false
     ) -> AppItem {
         AppItem(
-            id: UUID(),
+            id: stableID(path: path, profile: profile),
             name: name,
             path: path,
             icon: nil,
@@ -159,13 +191,26 @@ final class AppIndex: ObservableObject {
         isIndexing = true
         defer { isIndexing = false }
 
+        // Publish once after coalesced scans — intermediate assigns made the switch list jump.
+        var latest: [AppItem] = []
         repeat {
             needsReindex = false
-            let found = await Task.detached(priority: .userInitiated) {
+            latest = await Task.detached(priority: .userInitiated) {
                 Self.scanApps()
             }.value
-            self.apps = found
         } while needsReindex
+        publishApps(latest)
+    }
+
+    /// Skip no-op publishes so SwiftUI does not reshuffle an unchanged switch list.
+    private func publishApps(_ found: [AppItem]) {
+        if apps.count == found.count,
+           zip(apps, found).allSatisfy({
+               $0.id == $1.id && $0.isRunning == $1.isRunning && $0.profile == $1.profile
+           }) {
+            return
+        }
+        apps = found
     }
 
     private nonisolated static func scanApps() -> [AppItem] {
