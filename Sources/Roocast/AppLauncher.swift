@@ -3,56 +3,69 @@ import AppKit
 
 /// Handles app launching logic with profile support
 struct AppLauncher {
-    
-    /// Launch Firefox with a specific profile
-    /// - If profile is already running, brings it to front
-    /// - If not running, launches new instance with that profile
+
+    /// Launch Firefox with a specific profile.
+    /// - If that profile is already running, activates *that* process (by lock PID).
+    /// - If not, opens a new instance with `-no-remote` so a second profile can run.
     static func launchFirefoxProfile(profile: String, appPath: String) {
-        // Check if this profile is already running
-        let runningProfiles = ProfileManager.detectRunningProfiles()
-        
-        if runningProfiles[profile] != nil {
-            // Profile is running - bring Firefox to front
-            activateFirefox(appPath: appPath)
+        let profiles = ProfileManager.detectFirefoxProfiles()
+        guard let matched = profiles.first(where: { $0.name == profile }) else {
+            openFirefoxApp(appPath: appPath)
+            return
+        }
+
+        if ProfileManager.isProfileRunning(matched) {
+            activateFirefoxProfile(matched, appPath: appPath)
         } else {
-            // Profile not running - launch with -P argument
-            launchFirefoxWithProfile(profile: profile, appPath: appPath)
+            launchFirefoxWithProfile(profilePath: matched.path, appPath: appPath)
         }
     }
-    
-    /// Bring existing Firefox instance to front
-    private static func activateFirefox(appPath: String) {
-        let runningApps = NSWorkspace.shared.runningApplications
-        
-        for app in runningApps {
-            if app.bundleIdentifier == "org.mozilla.firefox" {
-                // Activate the first Firefox instance found
-                app.activate()
-                return
-            }
+
+    /// Bring the Firefox process that owns this profile to the front.
+    /// Must not use `.first` Firefox — multiple instances share one bundle ID.
+    private static func activateFirefoxProfile(_ profile: FirefoxProfile, appPath: String) {
+        if let pid = ProfileManager.pidHoldingParentLock(at: profile.path),
+           let app = NSRunningApplication(processIdentifier: pid) {
+            app.activate(options: [.activateAllWindows])
+            return
         }
-        
-        // Fallback: if no running instance found, launch normally
-        if let url = URL(string: "file://\(appPath)") {
-            NSWorkspace.shared.open(url)
+
+        // Fallback: any live Firefox, then open the bundle.
+        let running = NSWorkspace.shared.runningApplications
+            .filter { $0.bundleIdentifier == "org.mozilla.firefox" && !$0.isTerminated }
+        if let app = running.first {
+            app.activate(options: [.activateAllWindows])
+            return
+        }
+
+        openFirefoxApp(appPath: appPath)
+    }
+
+    /// Launch a new Firefox instance for a profile that is not already running.
+    /// `-no-remote` is required; without it, Firefox forwards to the existing process
+    /// and ignores the requested profile.
+    private static func launchFirefoxWithProfile(profilePath: URL, appPath: String) {
+        let appURL = URL(fileURLWithPath: appPath)
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = true
+        config.arguments = [
+            "-no-remote",
+            "--profile", profilePath.path,
+            "-foreground",
+        ]
+
+        NSWorkspace.shared.openApplication(at: appURL, configuration: config) { _, error in
+            if error != nil {
+                openFirefoxApp(appPath: appPath)
+            }
         }
     }
-    
-    /// Launch Firefox with specific profile argument
-    private static func launchFirefoxWithProfile(profile: String, appPath: String) {
-        let firefoxBinary = appPath + "/Contents/MacOS/firefox"
-        
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: firefoxBinary)
-        task.arguments = ["-P", profile, "-foreground"]
-        
-        do {
-            try task.run()
-        } catch {
-            // Fallback to standard launch if profile launch fails
-            if let url = URL(string: "file://\(appPath)") {
-                NSWorkspace.shared.open(url)
-            }
-        }
+
+    private static func openFirefoxApp(appPath: String) {
+        let appURL = URL(fileURLWithPath: appPath)
+        NSWorkspace.shared.openApplication(
+            at: appURL,
+            configuration: NSWorkspace.OpenConfiguration()
+        )
     }
 }

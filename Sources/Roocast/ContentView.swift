@@ -110,6 +110,12 @@ struct ContentView: View {
                 self.launchSelectedApp()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .launcherWillShow)) { _ in
+            Task { await appIndex.indexApps() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                isSearchFocused = true
+            }
+        }
         .onChange(of: query) { _, _ in
             navigationState.reset()
             navigationState.maxIndex = max(0, filteredApps.count - 1)
