@@ -26,7 +26,8 @@ final class LauncherPanel: NSPanel {
         level = .floating
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         isMovableByWindowBackground = false
-        hidesOnDeactivate = false
+        // Spotlight-style: click another app / lose focus hides the panel.
+        hidesOnDeactivate = true
 
         // Center at top of main screen (Spotlight-style)
         if let screen = NSScreen.main {
@@ -48,6 +49,14 @@ final class LauncherPanel: NSPanel {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
+    override func resignKey() {
+        super.resignKey()
+        // Click-away / focus loss: hide even if the app stays accessory-active.
+        if isVisible {
+            orderOut(nil)
+        }
+    }
 
     func show() {
         setContentSize(NSSize(width: panelWidth, height: panelHeight))
