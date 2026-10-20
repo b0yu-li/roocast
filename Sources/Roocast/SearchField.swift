@@ -56,6 +56,27 @@ struct SearchField: NSViewRepresentable {
                 parent.text = textField.stringValue
             }
         }
+
+        /// Field editor path — Return often never hits `CustomTextField.keyDown`.
+        func control(
+            _ control: NSControl,
+            textView: NSTextView,
+            doCommandBy commandSelector: Selector
+        ) -> Bool {
+            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                parent.onSubmit()
+                return true
+            }
+            if commandSelector == #selector(NSResponder.moveUp(_:)) {
+                NotificationCenter.default.post(name: .arrowUpPressed, object: nil)
+                return true
+            }
+            if commandSelector == #selector(NSResponder.moveDown(_:)) {
+                NotificationCenter.default.post(name: .arrowDownPressed, object: nil)
+                return true
+            }
+            return false
+        }
     }
 }
 
@@ -70,7 +91,7 @@ class CustomTextField: NSTextField {
             onArrowUp?()
         case KeyCode.downArrow:
             onArrowDown?()
-        case KeyCode.returnKey:
+        case KeyCode.returnKey, KeyCode.keypadEnter:
             onEnterKey?()
         default:
             super.keyDown(with: event)

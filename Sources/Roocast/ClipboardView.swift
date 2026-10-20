@@ -96,16 +96,14 @@ struct ClipboardView: View {
         .clipShape(RoundedRectangle(cornerRadius: ClipboardLayout.cornerRadius, style: .continuous))
         .onAppear {
             syncNavigation()
-            NotificationCenter.default.addObserver(
-                forName: .pasteSelectedClipboardItem,
-                object: nil,
-                queue: .main
-            ) { _ in
-                self.pasteSelected()
-            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 isSearchFocused = true
             }
+        }
+        // onReceive (not addObserver) so @State/@ObservedObject stay live — stale
+        // captures were silently no-op'ing Enter paste when query/filter disagreed.
+        .onReceive(NotificationCenter.default.publisher(for: .pasteSelectedClipboardItem)) { _ in
+            pasteSelected()
         }
         .onReceive(NotificationCenter.default.publisher(for: .clipboardWillShow)) { _ in
             query = ""
@@ -145,8 +143,18 @@ struct ClipboardView: View {
     }
 
     private func pasteSelected() {
-        guard !filteredItems.isEmpty else { return }
-        guard navigationState.selectedIndex < filteredItems.count else { return }
+        guard !filteredItems.isEmpty else {
+            FocusRestorer.log(
+                "clipboard: pasteSelected skipped — empty filter (query=\(query.debugDescription) history=\(store.items.count))"
+            )
+            return
+        }
+        guard navigationState.selectedIndex < filteredItems.count else {
+            FocusRestorer.log(
+                "clipboard: pasteSelected skipped — index \(navigationState.selectedIndex) out of \(filteredItems.count)"
+            )
+            return
+        }
         let item = filteredItems[navigationState.selectedIndex]
         query = ""
         onPaste(item)

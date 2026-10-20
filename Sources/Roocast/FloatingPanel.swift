@@ -192,9 +192,7 @@ class FloatingPanel: NSPanel {
     override func sendEvent(_ event: NSEvent) {
         // Only intercept bare navigation keys. Leave ⌘C / ⌘X / ⌘V / etc. alone
         // so the search field's performKeyEquivalent can handle edit shortcuts.
-        if event.type == .keyDown,
-           event.modifierFlags.intersection([.command, .option, .control]).isEmpty
-        {
+        if event.type == .keyDown, Self.isBareNavigationModifiers(event.modifierFlags) {
             switch event.keyCode {
             case KeyCode.upArrow:
                 onArrowUp?()
@@ -202,7 +200,7 @@ class FloatingPanel: NSPanel {
             case KeyCode.downArrow:
                 onArrowDown?()
                 return
-            case KeyCode.returnKey:
+            case KeyCode.returnKey, KeyCode.keypadEnter:
                 onEnter?()
                 return
             case KeyCode.escape:
@@ -214,11 +212,20 @@ class FloatingPanel: NSPanel {
         }
         super.sendEvent(event)
     }
+
+    /// Ignore device-dependent flag noise; only treat ⌘/⌥/⌃ as blocking navigation.
+    private static func isBareNavigationModifiers(_ flags: NSEvent.ModifierFlags) -> Bool {
+        flags
+            .intersection(.deviceIndependentFlagsMask)
+            .intersection([.command, .option, .control])
+            .isEmpty
+    }
 }
 
 /// Carbon / AppKit virtual key codes used by floating panels.
 enum KeyCode {
     static let returnKey: UInt16 = 36
+    static let keypadEnter: UInt16 = 76
     static let escape: UInt16 = 53
     static let upArrow: UInt16 = 126
     static let downArrow: UInt16 = 125

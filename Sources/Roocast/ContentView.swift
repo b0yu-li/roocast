@@ -102,15 +102,10 @@ struct ContentView: View {
                 isSearchFocused = true
             }
             syncNavigation()
-            
-            // Listen for launch notification
-            NotificationCenter.default.addObserver(
-                forName: .launchSelectedApp,
-                object: nil,
-                queue: .main
-            ) { _ in
-                self.launchSelectedApp()
-            }
+        }
+        // onReceive keeps SwiftUI state live (addObserver captured a stale View copy).
+        .onReceive(NotificationCenter.default.publisher(for: .launchSelectedApp)) { _ in
+            launchSelectedApp()
         }
         .onReceive(NotificationCenter.default.publisher(for: .launcherWillShow)) { _ in
             // Reset selection immediately; after reindex only refresh bounds so ↑/↓
