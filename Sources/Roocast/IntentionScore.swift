@@ -46,8 +46,22 @@ enum IntentionScore {
         return 0
     }
 
+    /// Typed-query score for an app row. Base name/search match, then boosts for
+    /// running apps and profile rows so `"fi"` prefers a running Firefox over idle FindMy.
     nonisolated static func score(query: String, app: AppItem) -> Int {
-        score(query: query, name: app.name, searchText: app.searchText)
+        let base = score(query: query, name: app.name, searchText: app.searchText)
+        guard base > 0 else { return 0 }
+
+        var result = base
+        // Running beats a near-tie on name length (FindMy vs Firefox for "fi").
+        if app.isRunning {
+            result += 5_000
+        }
+        // Multi-instance profile rows are explicit switch targets.
+        if app.profile != nil {
+            result += 1_000
+        }
+        return result
     }
 
     /// Empty-query switch intention: how likely the user wants to jump to this app.
