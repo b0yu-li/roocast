@@ -114,10 +114,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func pasteClipboardItem(_ item: ClipboardItem) {
         FocusRestorer.log("clipboard: paste selected len=\(item.text.count)")
+        // At most one Accessibility sheet per process — never on every Enter.
+        _ = FocusRestorer.ensureTrusted(prompt: true)
         clipboardStore.copyToPasteboard(item.text)
         let target = clipboardPanel?.hideForPaste()
-        // Give the target app a beat to become frontmost before synthesizing ⌘V.
-        let delay: TimeInterval = target == nil ? 0.12 : 0.08
+        // Target needs a moment to become key before synthetic ⌘V lands.
+        let delay: TimeInterval = target == nil ? 0.2 : 0.15
         ClipboardPaster.pasteCommandV(after: delay)
     }
 }
