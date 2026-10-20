@@ -5,6 +5,7 @@ final class FloatingPanelTests: XCTestCase {
 
     func testKeyCodesMatchCarbonVirtualKeys() {
         XCTAssertEqual(KeyCode.returnKey, 36)
+        XCTAssertEqual(KeyCode.keypadEnter, 76)
         XCTAssertEqual(KeyCode.escape, 53)
         XCTAssertEqual(KeyCode.upArrow, 126)
         XCTAssertEqual(KeyCode.downArrow, 125)
