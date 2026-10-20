@@ -62,6 +62,24 @@ struct AppItem: Identifiable, Hashable {
         )
     }()
 
+    /// Lightweight item for unit tests / ranking — no disk icon lookup.
+    static func stub(
+        name: String,
+        profile: String? = nil,
+        path: String = "/Applications/Stub.app",
+        isRunning: Bool = false
+    ) -> AppItem {
+        AppItem(
+            id: UUID(),
+            name: name,
+            path: path,
+            icon: nil,
+            isRunning: isRunning,
+            profile: profile,
+            kind: .app
+        )
+    }
+
     // Searchable text includes profile name
     var searchText: String {
         if let profile = profile {
@@ -158,32 +176,11 @@ final class AppIndex: ObservableObject {
     }
 
     func search(_ query: String) -> [AppItem] {
-        let lowered = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !lowered.isEmpty else { return [] }
-
-        var results: [AppItem] = []
-        if Self.matchesQuitCommand(lowered) {
-            results.append(.quitRoocast)
-        }
-
-        // Rank by intention score (prefix > mid-string) so "no" prefers Notes over Keynote.
-        let ranked = apps
-            .map { ($0, IntentionScore.score(query: lowered, app: $0)) }
-            .filter { $0.1 > 0 }
-            .sorted { lhs, rhs in
-                if lhs.1 != rhs.1 { return lhs.1 > rhs.1 }
-                return lhs.0.name.localizedCaseInsensitiveCompare(rhs.0.name) == .orderedAscending
-            }
-            .map(\.0)
-
-        results.append(contentsOf: ranked)
-        return results
+        AppSearch.results(query: query, apps: apps)
     }
 
     /// Matches as the user types toward "quit" / "quit roocast".
     nonisolated static func matchesQuitCommand(_ query: String) -> Bool {
-        let lowered = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !lowered.isEmpty else { return false }
-        return "quit".hasPrefix(lowered) || "quit roocast".hasPrefix(lowered)
+        AppSearch.matchesQuitCommand(query)
     }
 }
