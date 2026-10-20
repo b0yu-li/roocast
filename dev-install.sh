@@ -106,13 +106,25 @@ cat > "${BUILD_DIR}/${BUNDLE_NAME}/Contents/Info.plist" << EOF
 EOF
 
 echo "📋 Installing to ${INSTALL_DIR}..."
+# Prefer in-place Contents replace so the Accessibility TCC entry for
+# /Applications/Roocast.app is less likely to go stale than rm -rf.
 if [ -d "${INSTALL_PATH}" ]; then
-    echo "   Removing old installation..."
-    rm -rf "${INSTALL_PATH}"
+    echo "   Updating existing installation in place..."
+    rm -rf "${INSTALL_PATH}/Contents"
+    cp -R "${BUILD_DIR}/${BUNDLE_NAME}/Contents" "${INSTALL_PATH}/Contents"
+else
+    cp -R "${BUILD_DIR}/${BUNDLE_NAME}" "${INSTALL_DIR}/"
 fi
-cp -R "${BUILD_DIR}/${BUNDLE_NAME}" "${INSTALL_DIR}/"
+
+# Explicit adhoc sign with stable identifier (linker-signed alone is flaky with TCC).
+if codesign --force --deep --sign - --identifier "com.roocast.app" "${INSTALL_PATH}" 2>/dev/null; then
+    echo "   Signed adhoc as com.roocast.app"
+else
+    echo "   ⚠️  codesign failed — Accessibility may need a manual toggle after install." >&2
+fi
 
 echo "✅ ${APP_NAME} ${VERSION} installed to ${INSTALL_PATH}"
+echo "ℹ️  v0.3.19+: panel is nonactivating (Ghostty keeps tab focus). Logs: ~/Library/Logs/Roocast/focus.log"
 
 if [ "${LAUNCH}" -eq 1 ]; then
     echo "🚀 Launching ${INSTALL_PATH}..."
