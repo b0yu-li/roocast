@@ -29,6 +29,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showPanel()
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        clipboardStore.stopMonitoring()
+    }
+
     private func setupPanel() {
         panel = LauncherPanel(navigationState: navigationState)
 
