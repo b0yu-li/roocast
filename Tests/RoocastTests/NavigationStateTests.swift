@@ -34,4 +34,13 @@ final class NavigationStateTests: XCTestCase {
         nav.reset()
         XCTAssertEqual(nav.selectedIndex, 0)
     }
+
+    /// Empty-summon bug: list can render while maxIndex is still 0 (index not synced yet).
+    func testMoveDownStuckWhenMaxIndexZero() {
+        let nav = NavigationState()
+        nav.maxIndex = 0
+        nav.selectedIndex = 0
+        nav.moveDown()
+        XCTAssertEqual(nav.selectedIndex, 0)
+    }
 }

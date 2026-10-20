@@ -135,7 +135,8 @@ struct AppItem: Identifiable, Hashable {
 
 @MainActor
 final class AppIndex: ObservableObject {
-    @Published private var apps: [AppItem] = []
+    /// Readable so the UI can refresh arrow bounds when indexing finishes (empty summon).
+    @Published private(set) var apps: [AppItem] = []
     /// Coalesce overlapping refreshes (init + panel-show) so flock probes never race.
     private var isIndexing = false
     private var needsReindex = false
@@ -147,7 +148,12 @@ final class AppIndex: ObservableObject {
 
     func indexApps() async {
         if isIndexing {
+            // Coalesce with the in-flight scan, then wait so callers (e.g. empty-summon
+            // syncNavigation) don't run against a still-empty index.
             needsReindex = true
+            while isIndexing {
+                try? await Task.sleep(nanoseconds: 5_000_000)
+            }
             return
         }
         isIndexing = true

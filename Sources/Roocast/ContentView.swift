@@ -122,12 +122,24 @@ struct ContentView: View {
         .onChange(of: query) { _, _ in
             syncNavigation()
         }
+        // Empty-summon list appears when indexing finishes — query never changes, so
+        // refresh arrow bounds whenever the index updates.
+        .onChange(of: appIndex.apps) { _, _ in
+            updateNavigationBounds()
+        }
         .environmentObject(navigationState)
     }
 
     private func syncNavigation() {
         navigationState.reset()
+        updateNavigationBounds()
+    }
+
+    private func updateNavigationBounds() {
         navigationState.maxIndex = max(0, filteredApps.count - 1)
+        if navigationState.selectedIndex > navigationState.maxIndex {
+            navigationState.selectedIndex = navigationState.maxIndex
+        }
     }
 
     private func launchSelectedApp() {
@@ -192,39 +204,39 @@ struct AppRow: View {
                         .frame(width: 6, height: 6)
                         .overlay(
                             Circle()
-                                .stroke(isSelected ? Color.accentColor.opacity(0.9) : Color.primary.opacity(0.15), lineWidth: 1)
+                                .stroke(
+                                    isSelected ? Color.accentColor.opacity(0.9) : Color.primary.opacity(0.15),
+                                    lineWidth: 1
+                                )
                         )
                         .offset(x: 2, y: 2)
                 }
             }
             .frame(width: 26, height: 26)
 
-            VStack(alignment: .leading, spacing: 1) {
+            // Name only — no filesystem paths. Profile stays as a quiet label when needed.
+            HStack(spacing: 6) {
                 Text(app.name)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(isSelected ? Color.white : Color.primary)
-                
-                // Show profile name if available, otherwise show path
+
                 if let profile = app.profile {
                     Text(profile)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Color.accentColor)
-                } else {
-                    Text(app.path)
-                        .font(.system(size: 11))
-                        .foregroundStyle(isSelected ? Color.white.opacity(0.7) : Color.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.8) : .secondary)
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(
-            RoundedRectangle(cornerRadius: 5)
-                .fill(isSelected ? Color.accentColor : Color.primary.opacity(0.04))
-        )
+        .padding(.vertical, 6)
+        // Selection only — no idle row chrome.
+        .background {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.accentColor)
+            }
+        }
     }
 }
