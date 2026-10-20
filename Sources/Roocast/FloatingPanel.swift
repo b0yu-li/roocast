@@ -190,7 +190,11 @@ class FloatingPanel: NSPanel {
     }
 
     override func sendEvent(_ event: NSEvent) {
-        if event.type == .keyDown {
+        // Only intercept bare navigation keys. Leave ⌘C / ⌘X / ⌘V / etc. alone
+        // so the search field's performKeyEquivalent can handle edit shortcuts.
+        if event.type == .keyDown,
+           event.modifierFlags.intersection([.command, .option, .control]).isEmpty
+        {
             switch event.keyCode {
             case KeyCode.upArrow:
                 onArrowUp?()
