@@ -9,8 +9,11 @@ class FloatingPanel: NSPanel {
     var onArrowDown: (() -> Void)?
     var onEnter: (() -> Void)?
 
-    /// Prior app captured at show — used if we stole activation or for paste restore.
-    private(set) weak var previouslyActiveApp: NSRunningApplication?
+    /// Prior app captured at show — must be **strong**.
+    /// A weak `NSRunningApplication` from `frontmostApplication` often deallocates
+    /// after the event-loop turn, so paste would always hit the frontmost fallback.
+    private(set) var previouslyActiveApp: NSRunningApplication?
+    private var previousAppPID: pid_t?
     private(set) var previousFocusSnapshot = FocusRestorer.Snapshot()
     private(set) var didStealActivation = false
 
@@ -131,6 +134,7 @@ class FloatingPanel: NSPanel {
     @discardableResult
     func hideForPaste() -> NSRunningApplication? {
         let ourPID = ProcessInfo.processInfo.processIdentifier
+        let rememberedPID = previousAppPID
         var appToRestore = previouslyActiveApp
         let snapshot = previousFocusSnapshot
         clearPreviousFocus()
@@ -138,6 +142,16 @@ class FloatingPanel: NSPanel {
 
         if isVisible {
             orderOut(nil)
+        }
+
+        // Re-resolve by PID if the remembered object was cleared somehow.
+        if (appToRestore == nil || appToRestore?.isTerminated == true),
+           let rememberedPID,
+           let byPID = NSRunningApplication(processIdentifier: rememberedPID),
+           !byPID.isTerminated
+        {
+            appToRestore = byPID
+            FocusRestorer.log("\(logPrefix)hideForPaste: resolved pid=\(rememberedPID)")
         }
 
         if appToRestore == nil || appToRestore?.isTerminated == true {
@@ -155,7 +169,7 @@ class FloatingPanel: NSPanel {
 
         let activated = app.activate()
         FocusRestorer.log(
-            "\(logPrefix)hideForPaste: activate \(app.localizedName ?? "?") ok=\(activated)"
+            "\(logPrefix)hideForPaste: activate \(app.localizedName ?? "?") pid=\(app.processIdentifier) ok=\(activated)"
         )
         FocusRestorer.restore(app: app, snapshot: snapshot)
         return app
@@ -166,6 +180,7 @@ class FloatingPanel: NSPanel {
         let ourPID = ProcessInfo.processInfo.processIdentifier
         if let front, front.processIdentifier != ourPID, !front.isTerminated {
             previouslyActiveApp = front
+            previousAppPID = front.processIdentifier
             previousFocusSnapshot = FocusRestorer.capture(pid: front.processIdentifier)
             FocusRestorer.log(
                 "\(logPrefix)remember: \(front.localizedName ?? "?") pid=\(front.processIdentifier)"
@@ -178,6 +193,7 @@ class FloatingPanel: NSPanel {
 
     private func clearPreviousFocus() {
         previouslyActiveApp = nil
+        previousAppPID = nil
         previousFocusSnapshot = FocusRestorer.Snapshot()
     }
 

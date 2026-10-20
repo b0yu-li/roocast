@@ -319,13 +319,30 @@ final class ClipboardStore: ObservableObject {
 }
 
 /// Posts ⌘V after focus has returned to the previous app.
+///
+/// Prefer Accessibility trust so macOS delivers the synthetic keys. We still post
+/// even when `isTrusted` is false (TCC can lag after the user enables the toggle);
+/// text is always on the pasteboard so ⌘V manually still works.
 enum ClipboardPaster {
-    static func pasteCommandV(after delay: TimeInterval = 0.08) {
+    static func pasteCommandV(after delay: TimeInterval = 0.15) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            // Never prompt here — `pasteClipboardItem` already asked once.
+            let trusted = FocusRestorer.isTrusted()
+            if !trusted {
+                FocusRestorer.log(
+                    "clipboard: posting ⌘V without AX trust (may be dropped; text is on pasteboard)"
+                )
+            }
+
             guard let source = CGEventSource(stateID: .hidSystemState) else {
                 FocusRestorer.log("clipboard: paste failed — no CGEventSource")
                 return
             }
+            source.setLocalEventsFilterDuringSuppressionState(
+                [.permitLocalMouseEvents, .permitLocalKeyboardEvents],
+                state: .eventSuppressionStateSuppressionInterval
+            )
+
             let keyV: CGKeyCode = 9
             guard
                 let down = CGEvent(keyboardEventSource: source, virtualKey: keyV, keyDown: true),
@@ -339,7 +356,7 @@ enum ClipboardPaster {
             down.post(tap: .cghidEventTap)
             up.post(tap: .cghidEventTap)
             let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
-            FocusRestorer.log("clipboard: posted ⌘V (frontmost=\(front))")
+            FocusRestorer.log("clipboard: posted ⌘V (frontmost=\(front), ax=\(trusted ? 1 : 0))")
         }
     }
 }

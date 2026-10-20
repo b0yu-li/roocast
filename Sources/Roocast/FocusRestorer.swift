@@ -6,6 +6,8 @@ import ApplicationServices
 /// On the happy (nonactivating) path this is unused — Ghostty never loses tab focus.
 enum FocusRestorer {
     private static var didLogTrust = false
+    /// System Accessibility dialog is sticky — show it at most once per process.
+    private static var didPromptForTrust = false
 
     struct Snapshot {
         var window: AXUIElement?
@@ -45,6 +47,37 @@ enum FocusRestorer {
     static func isTrusted() -> Bool {
         let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false] as CFDictionary
         return AXIsProcessTrustedWithOptions(opts)
+    }
+
+    /// Returns current Accessibility trust.
+    ///
+    /// When `prompt` is true and untrusted, shows the system dialog **at most once**
+    /// per process. Calling this on every Enter used to spam the Accessibility sheet.
+    ///
+    /// Adhoc-signed builds: after enabling Roocast in Privacy → Accessibility, **quit and
+    /// relaunch** Roocast — TCC often only applies to a new process. Each reinstall can
+    /// also create a new TCC identity (new CDHash).
+    @discardableResult
+    static func ensureTrusted(prompt: Bool) -> Bool {
+        if isTrusted() { return true }
+        guard prompt else { return false }
+        guard !didPromptForTrust else {
+            // Already asked this session — do not raise the sheet again.
+            return isTrusted()
+        }
+        didPromptForTrust = true
+
+        log("Accessibility not trusted — prompting once (required for clipboard ⌘V)")
+        let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        let trusted = AXIsProcessTrustedWithOptions(opts)
+        if trusted {
+            log("Accessibility trusted=1 (after prompt)")
+        } else {
+            log(
+                "Accessibility still denied — enable Roocast in Privacy → Accessibility, then fully quit & relaunch Roocast"
+            )
+        }
+        return trusted
     }
 
     static func capture(pid: pid_t) -> Snapshot {
