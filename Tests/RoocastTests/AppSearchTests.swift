@@ -70,4 +70,46 @@ final class AppSearchTests: XCTestCase {
         let ranked = AppSearch.rank(query: "ab", apps: tied)
         XCTAssertEqual(ranked.map(\.name), ["Xab", "Yab"])
     }
+
+    func testResultsIncludesFolderForDownloadsPrefix() {
+        let folders = [
+            AppItem.folderStub(name: "Downloads", aliases: ["dl"]),
+        ]
+        let results = AppSearch.results(
+            query: "dow",
+            apps: [AppItem.stub(name: "Safari")],
+            folders: folders
+        )
+        XCTAssertEqual(results.first?.kind, .folder)
+        XCTAssertEqual(results.first?.name, "Downloads")
+    }
+
+    func testResultsMatchesFolderAlias() {
+        let folders = [
+            AppItem.folderStub(name: "Downloads", aliases: ["dl"]),
+        ]
+        let results = AppSearch.results(
+            query: "dl",
+            apps: [AppItem.stub(name: "Safari")],
+            folders: folders
+        )
+        XCTAssertTrue(results.contains { $0.kind == .folder && $0.name == "Downloads" })
+    }
+
+    func testResultsRanksFolderAboveWeakAppMatch() {
+        let folders = [
+            AppItem.folderStub(name: "Downloads", aliases: ["dl"]),
+        ]
+        let apps = [AppItem.stub(name: "Shadow")]
+        let results = AppSearch.results(query: "dow", apps: apps, folders: folders)
+        XCTAssertEqual(results.first?.name, "Downloads")
+        XCTAssertEqual(results.first?.kind, .folder)
+    }
+
+    func testResultsEmptyQueryStillEmptyWithFolders() {
+        let folders = [AppItem.folderStub(name: "Downloads")]
+        XCTAssertTrue(
+            AppSearch.results(query: "", apps: [AppItem.stub(name: "Notes")], folders: folders).isEmpty
+        )
+    }
 }

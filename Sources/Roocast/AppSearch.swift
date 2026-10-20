@@ -1,6 +1,6 @@
 import Foundation
 
-/// Pure search ranking: quit command + intention-scored app results.
+/// Pure search ranking: quit command + intention-scored apps and folders.
 ///
 /// Kept free of `AppIndex` / disk I/O so ranking stays unit-testable.
 enum AppSearch {
@@ -11,20 +11,29 @@ enum AppSearch {
         return "quit".hasPrefix(lowered) || "quit roocast".hasPrefix(lowered)
     }
 
-    /// Quit (if matched) first, then apps ranked by `IntentionScore`.
-    nonisolated static func results(query: String, apps: [AppItem]) -> [AppItem] {
+    /// Quit (if matched) first, then apps + folders ranked together by `IntentionScore`.
+    ///
+    /// - Parameter folders: Folder shortcut rows. Defaults to built-in shortcuts.
+    ///   Pass stubs in unit tests to avoid disk icon lookup.
+    nonisolated static func results(
+        query: String,
+        apps: [AppItem],
+        folders: [AppItem]? = nil
+    ) -> [AppItem] {
         let lowered = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !lowered.isEmpty else { return [] }
+
+        let folderItems = folders ?? FolderShortcut.builtIns.map { AppItem.folder($0) }
 
         var output: [AppItem] = []
         if matchesQuitCommand(lowered) {
             output.append(.quitRoocast)
         }
-        output.append(contentsOf: rank(query: lowered, apps: apps))
+        output.append(contentsOf: rank(query: lowered, apps: apps + folderItems))
         return output
     }
 
-    /// Rank apps by intention score (prefix > mid-string); ties break by name.
+    /// Rank items by intention score (prefix > mid-string); ties break by name.
     nonisolated static func rank(query: String, apps: [AppItem]) -> [AppItem] {
         let lowered = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !lowered.isEmpty else { return [] }
