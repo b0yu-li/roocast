@@ -53,6 +53,31 @@ final class IntentionScoreTests: XCTestCase {
         )
     }
 
+    /// `"fi"` used to rank FindMy above Firefox purely because the name is one char shorter.
+    func testRunningFirefoxBeatsIdleFindMyForFi() {
+        let findMy = AppItem.stub(name: "FindMy", path: "/System/Applications/FindMy.app")
+        let firefox = AppItem.stub(
+            name: "Firefox",
+            profile: "default-release",
+            path: "/Applications/Firefox.app",
+            isRunning: true
+        )
+        XCTAssertGreaterThan(
+            IntentionScore.score(query: "fi", app: firefox),
+            IntentionScore.score(query: "fi", app: findMy)
+        )
+    }
+
+    func testRunningBoostDoesNotOverturnPrefixVsSubstring() {
+        // Idle Notes (prefix) must still beat running Keynote (mid-string "no").
+        let notes = AppItem.stub(name: "Notes", isRunning: false)
+        let keynote = AppItem.stub(name: "Keynote", isRunning: true)
+        XCTAssertGreaterThan(
+            IntentionScore.score(query: "no", app: notes),
+            IntentionScore.score(query: "no", app: keynote)
+        )
+    }
+
     func testSwitchScoreOnlyRunningApps() {
         let running = AppItem.stub(name: "Slack", path: "/Applications/Slack.app", isRunning: true)
         let idle = AppItem.stub(name: "Notes", path: "/Applications/Notes.app", isRunning: false)

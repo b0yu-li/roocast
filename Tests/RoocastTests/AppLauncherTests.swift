@@ -77,10 +77,10 @@ final class AppLauncherTests: XCTestCase {
     }
 
     func testAppVersionString() {
-        XCTAssertEqual(AppVersion.string, "0.4.4")
+        XCTAssertEqual(AppVersion.string, "0.4.5")
         XCTAssertEqual(AppVersion.major, 0)
         XCTAssertEqual(AppVersion.minor, 4)
-        XCTAssertEqual(AppVersion.patch, 4)
+        XCTAssertEqual(AppVersion.patch, 5)
     }
 
     /// Reindex must reuse the same id or the switcher ForEach rebuilds every row (visible jump).

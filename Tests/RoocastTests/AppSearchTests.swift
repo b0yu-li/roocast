@@ -74,6 +74,28 @@ final class AppSearchTests: XCTestCase {
         XCTAssertEqual(ranked.map(\.name), ["Notes", "Keynote"])
     }
 
+    func testRankPrefersRunningFirefoxOverFindMyForFi() {
+        let apps = [
+            AppItem.stub(name: "FindMy", path: "/System/Applications/FindMy.app"),
+            AppItem.stub(
+                name: "Firefox",
+                profile: "default-release",
+                path: "/Applications/Firefox.app",
+                isRunning: true
+            ),
+            AppItem.stub(
+                name: "Firefox",
+                profile: "Profile 1",
+                path: "/Applications/Firefox.app",
+                isRunning: true
+            ),
+            AppItem.stub(name: "Final Cut Pro"),
+        ]
+        let ranked = AppSearch.rank(query: "fi", apps: apps)
+        XCTAssertEqual(ranked.first?.name, "Firefox")
+        XCTAssertEqual(ranked.first?.profile, "default-release")
+    }
+
     func testRankFiltersByProfileName() {
         let apps = [
             AppItem.stub(name: "Firefox", profile: "work"),
