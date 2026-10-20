@@ -60,6 +60,8 @@ final class LauncherPanel: NSPanel {
 
     func show() {
         setContentSize(NSSize(width: panelWidth, height: panelHeight))
+        // Refresh running-app / Firefox-profile state each open.
+        NotificationCenter.default.post(name: .launcherWillShow, object: nil)
         makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }

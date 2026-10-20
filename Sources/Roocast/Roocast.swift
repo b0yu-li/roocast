@@ -67,4 +67,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 extension Notification.Name {
     static let launchSelectedApp = Notification.Name("launchSelectedApp")
+    static let launcherWillShow = Notification.Name("launcherWillShow")
 }
