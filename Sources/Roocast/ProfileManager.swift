@@ -41,9 +41,12 @@ struct ProfileManager {
         }
 
         // 2. Running orphans without prefs.js still need a selectable row.
+        // Use libproc PID ownership — NOT flock. Concurrent index scans briefly take
+        // LOCK_EX on stub `.parentlock` files; a second scan then false-positives
+        // "held" and invents a ghost row (e.g. INI stub `default` with no green dot).
         for url in profileDirectoriesOnDisk() {
             let key = standardizedPath(url)
-            guard byPath[key] == nil, isParentLockHeld(at: url) else { continue }
+            guard byPath[key] == nil, pidHoldingParentLock(at: url) != nil else { continue }
             byPath[key] = FirefoxProfile(
                 name: displayName(fromProfileFolder: url.lastPathComponent),
                 path: url,
@@ -227,25 +230,31 @@ struct ProfileManager {
     // MARK: - Running Instance Detection
 
     /// Detect which Firefox profiles are currently running.
-    /// Uses an exclusive flock probe on `.parentlock` — never shells out to `ps`/`pgrep`.
+    /// Never shells out to `ps`/`pgrep`.
     static func detectRunningProfiles() -> [String: FirefoxProfile] {
-        let profiles = detectFirefoxProfiles()
-        var result: [String: FirefoxProfile] = [:]
+        detectRunningProfiles(among: detectFirefoxProfiles())
+    }
 
+    /// Same as `detectRunningProfiles()` but reuses an already-fetched profile list.
+    static func detectRunningProfiles(among profiles: [FirefoxProfile]) -> [String: FirefoxProfile] {
+        var result: [String: FirefoxProfile] = [:]
         for profile in profiles {
             if isProfileRunning(profile) {
                 result[profile.name] = profile
             }
         }
-
         return result
     }
 
-    /// True when Firefox holds an exclusive lock on the profile's `.parentlock`.
+    /// True when a live Firefox process owns this profile.
     ///
-    /// Modern Firefox leaves a stale zero-byte `.parentlock` file after quit; existence
-    /// alone is NOT a running signal. The live instance holds an advisory flock on it.
+    /// Prefers libproc (PID has `.parentlock` open) so concurrent Roocast index
+    /// scans cannot false-positive via briefly holding flock themselves.
     static func isProfileRunning(_ profile: FirefoxProfile) -> Bool {
+        if pidHoldingParentLock(at: profile.path) != nil {
+            return true
+        }
+        // Fallback: exclusive flock (ignore non-EWOULDBLOCK errors).
         if isParentLockHeld(at: profile.path) {
             return true
         }
@@ -265,7 +274,9 @@ struct ProfileManager {
             flock(fd, LOCK_UN)
             return false
         }
-        return true
+        // Only EWOULDBLOCK/EAGAIN mean another process holds the lock.
+        // Other errno values (and races with our own probes) must not count as "running".
+        return errno == EWOULDBLOCK || errno == EAGAIN
     }
 
     /// PID of the Firefox process that has this profile's `.parentlock` open.
