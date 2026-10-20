@@ -4,9 +4,14 @@ import Security
 
 /// AES-GCM encryption for clipboard history, keyed from the macOS Keychain.
 ///
-/// The key is stored with `ThisDeviceOnly` accessibility so it does not sync via
-/// iCloud Keychain. Copying the history file to another Mac (or user) yields
-/// ciphertext that cannot be decrypted without this Mac's Keychain entry.
+/// ## Threat model (accepted)
+/// - **Protects:** file-at-rest — copying `clipboard-history.enc` to another Mac / user
+///   yields ciphertext without the Keychain key (`WhenUnlockedThisDeviceOnly`, no iCloud sync).
+/// - **Does not protect:** another process running as the *same* logged-in user that knows
+///   service `com.roocast.app.clipboard` / account `history-aes-key` can `SecItemCopyMatching`
+///   and decrypt. App-bound Keychain ACL needs a stable code signature (not adhoc).
+/// - **Also note:** any app can already read the *current* pasteboard via `NSPasteboard`;
+///   this only covers persisted history on disk.
 enum ClipboardCrypto {
     /// File magic — distinguishes encrypted blobs from legacy plaintext JSON.
     static let magic = Data("ROOCST01".utf8)
