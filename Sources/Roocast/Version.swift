@@ -4,7 +4,7 @@ import Foundation
 struct AppVersion {
     static let major = 0
     static let minor = 3
-    static let patch = 12
+    static let patch = 19
     
     static var string: String {
         "\(major).\(minor).\(patch)"

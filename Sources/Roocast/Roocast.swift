@@ -53,7 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func togglePanel() {
         guard let panel else { return }
         if panel.isVisible {
-            panel.orderOut(nil)
+            // Escape / hotkey dismiss: hide without stealing Ghostty tab focus when possible.
+            panel.hide(restoreFocus: true)
         } else {
             panel.show()
         }

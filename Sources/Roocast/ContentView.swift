@@ -90,9 +90,15 @@ struct ContentView: View {
             }
         }
         .frame(width: LauncherLayout.width, height: LauncherLayout.height)
+        // Solid underlay first: SwiftUI materials can draw blank while Roocast is inactive
+        // (nonactivating panel keeps Ghostty frontmost).
         .background(
-            RoundedRectangle(cornerRadius: LauncherLayout.cornerRadius, style: .continuous)
-                .fill(.thickMaterial)
+            ZStack {
+                RoundedRectangle(cornerRadius: LauncherLayout.cornerRadius, style: .continuous)
+                    .fill(Color(nsColor: .windowBackgroundColor).opacity(0.94))
+                RoundedRectangle(cornerRadius: LauncherLayout.cornerRadius, style: .continuous)
+                    .fill(.thickMaterial)
+            }
         )
         .clipShape(RoundedRectangle(cornerRadius: LauncherLayout.cornerRadius, style: .continuous))
         .onAppear {
