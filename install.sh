@@ -23,6 +23,17 @@ mkdir -p "${BUILD_DIR}/${BUNDLE_NAME}/Contents/Resources"
 # Copy executable
 cp "${BUILD_DIR}/${APP_NAME}" "${BUILD_DIR}/${BUNDLE_NAME}/Contents/MacOS/${APP_NAME}"
 
+# Keep Info.plist version in sync with Sources/Roocast/Version.swift
+VERSION=$(python3 - <<'PY'
+import re, pathlib
+text = pathlib.Path("Sources/Roocast/Version.swift").read_text()
+major = re.search(r"static let major = (\d+)", text).group(1)
+minor = re.search(r"static let minor = (\d+)", text).group(1)
+patch = re.search(r"static let patch = (\d+)", text).group(1)
+print(f"{major}.{minor}.{patch}")
+PY
+)
+
 # Create Info.plist
 cat > "${BUILD_DIR}/${BUNDLE_NAME}/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -38,7 +49,7 @@ cat > "${BUILD_DIR}/${BUNDLE_NAME}/Contents/Info.plist" << EOF
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.2.3</string>
+    <string>${VERSION}</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
