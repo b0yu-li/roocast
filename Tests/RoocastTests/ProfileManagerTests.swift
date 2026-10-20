@@ -65,6 +65,7 @@ final class ProfileManagerTests: XCTestCase {
         XCTAssertTrue(profiles[1].isDefault)
     }
 
+
     func testDisplayNameFromProfileFolder() {
         XCTAssertEqual(ProfileManager.displayName(fromProfileFolder: "2aldte6y.default-release"), "default-release")
         XCTAssertEqual(ProfileManager.displayName(fromProfileFolder: "Tkfsj6cm.Profile 1"), "Profile 1")
@@ -82,7 +83,7 @@ final class ProfileManagerTests: XCTestCase {
         XCTAssertEqual(names, ["default-release", "Profile 1"])
     }
 
-    func testDetectFirefoxProfilesIncludesEveryOnDiskFolder() {
+    func testDetectFirefoxProfilesIncludesRealAndRunningFolders() {
         let profiles = ProfileManager.detectFirefoxProfiles()
         let profilesDir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/Firefox/Profiles")
@@ -96,20 +97,41 @@ final class ProfileManagerTests: XCTestCase {
 
         let detectedPaths = Set(profiles.map { $0.path.resolvingSymlinksInPath().path })
         for url in children {
-            let times = url.appendingPathComponent("times.json")
-            let prefs = url.appendingPathComponent("prefs.js")
-            guard FileManager.default.fileExists(atPath: times.path)
-                    || FileManager.default.fileExists(atPath: prefs.path) else {
-                continue
+            let hasPrefs = ProfileManager.hasPrefsJS(at: url)
+            let isRunning = ProfileManager.isParentLockHeld(at: url)
+            if hasPrefs || isRunning {
+                XCTAssertTrue(
+                    detectedPaths.contains(url.resolvingSymlinksInPath().path),
+                    "Missing usable profile \(url.lastPathComponent) in \(detectedPaths)"
+                )
+            } else {
+                // Stub folders (times.json only, not running) must not appear.
+                XCTAssertFalse(
+                    detectedPaths.contains(url.resolvingSymlinksInPath().path),
+                    "Stub profile \(url.lastPathComponent) should be omitted"
+                )
             }
-            XCTAssertTrue(
-                detectedPaths.contains(url.resolvingSymlinksInPath().path),
-                "Missing on-disk profile \(url.lastPathComponent) in \(detectedPaths)"
-            )
         }
 
         let names = profiles.map(\.name)
         XCTAssertEqual(names.count, Set(names).count, "Profile display names must be unique: \(names)")
+    }
+
+    func testDetectFirefoxProfilesSkipsLiveStubDefault() {
+        let stub = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Firefox/Profiles/7604yf6f.default")
+        guard FileManager.default.fileExists(atPath: stub.path),
+              !ProfileManager.hasPrefsJS(at: stub),
+              !ProfileManager.isParentLockHeld(at: stub) else {
+            return
+        }
+
+        let profiles = ProfileManager.detectFirefoxProfiles()
+        let paths = profiles.map { $0.path.resolvingSymlinksInPath().path }
+        XCTAssertFalse(
+            paths.contains(stub.resolvingSymlinksInPath().path),
+            "Unused INI stub `default` must not create a third Firefox row"
+        )
     }
 
     func testParentLockHeldRequiresExclusiveFlock() throws {

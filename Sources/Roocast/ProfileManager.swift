@@ -27,17 +27,31 @@ private struct proc_fdinfo {
 struct ProfileManager {
     // MARK: - Profile Detection
 
-    /// Every on-disk profile folder, with names from `profiles.ini` when that path is listed.
-    /// Orphan folders (running but removed/renamed in the INI) still appear.
+    /// Usable on-disk profiles, with names from `profiles.ini` when that path is listed.
+    ///
+    /// Stub folders (e.g. INI `default` with only `times.json`, no `prefs.js`) are omitted
+    /// unless Firefox is currently holding their `.parentlock` — otherwise they inflate the
+    /// launcher with ghost rows (3 Firefox entries for 2 real instances).
     static func detectFirefoxProfiles() -> [FirefoxProfile] {
         var byPath: [String: FirefoxProfile] = [:]
 
-        // 1. Disk is source of truth for what can actually run.
+        // 1. Real profiles on disk (require prefs.js).
         for profile in discoverProfilesOnDisk() {
             byPath[standardizedPath(profile.path)] = profile
         }
 
-        // 2. INI overlays friendly Name + Default onto matching paths.
+        // 2. Running orphans without prefs.js still need a selectable row.
+        for url in profileDirectoriesOnDisk() {
+            let key = standardizedPath(url)
+            guard byPath[key] == nil, isParentLockHeld(at: url) else { continue }
+            byPath[key] = FirefoxProfile(
+                name: displayName(fromProfileFolder: url.lastPathComponent),
+                path: url,
+                isDefault: false
+            )
+        }
+
+        // 3. INI overlays friendly Name + Default onto matching paths.
         let profilesPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/Firefox/profiles.ini")
         if let data = try? Data(contentsOf: profilesPath),
@@ -50,10 +64,11 @@ struct ProfileManager {
                         path: profile.path,
                         isDefault: profile.isDefault
                     )
-                } else {
-                    // INI path missing on disk — still list it (launch may recreate).
+                } else if hasPrefsJS(at: profile.path) {
+                    // INI path with prefs but missed by disk scan — still list.
                     byPath[key] = profile
                 }
+                // else: stub INI entry (times.json / empty) — skip
             }
         }
 
@@ -61,6 +76,13 @@ struct ProfileManager {
             if lhs.isDefault != rhs.isDefault { return lhs.isDefault && !rhs.isDefault }
             return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
         }
+    }
+
+    /// True when the folder looks like a real Firefox profile (has `prefs.js`).
+    static func hasPrefsJS(at profileDirectory: URL) -> Bool {
+        FileManager.default.fileExists(
+            atPath: profileDirectory.appendingPathComponent("prefs.js").path
+        )
     }
 
     /// When two paths share a display name (common after Firefox rewrites `profiles.ini`),
@@ -167,7 +189,7 @@ struct ProfileManager {
         return folderName
     }
 
-    private static func discoverProfilesOnDisk() -> [FirefoxProfile] {
+    private static func profileDirectoriesOnDisk() -> [URL] {
         let profilesDir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/Firefox/Profiles")
         guard let children = try? FileManager.default.contentsOfDirectory(
@@ -178,26 +200,24 @@ struct ProfileManager {
             return []
         }
 
-        var found: [FirefoxProfile] = []
-        for url in children {
+        return children.filter { url in
             var isDir: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else {
-                continue
-            }
-            // Real profiles have prefs.js and/or times.json.
-            let prefs = url.appendingPathComponent("prefs.js")
-            let times = url.appendingPathComponent("times.json")
-            guard FileManager.default.fileExists(atPath: prefs.path)
-                    || FileManager.default.fileExists(atPath: times.path) else {
-                continue
-            }
-            found.append(FirefoxProfile(
+            return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+                && isDir.boolValue
+        }
+    }
+
+    private static func discoverProfilesOnDisk() -> [FirefoxProfile] {
+        profileDirectoriesOnDisk().compactMap { url in
+            // `times.json` alone is not enough — Firefox leaves stub folders (e.g. unused
+            // `*.default`) that only have times.json + a stale .parentlock.
+            guard hasPrefsJS(at: url) else { return nil }
+            return FirefoxProfile(
                 name: displayName(fromProfileFolder: url.lastPathComponent),
                 path: url,
                 isDefault: false
-            ))
+            )
         }
-        return found
     }
 
     private static func standardizedPath(_ url: URL) -> String {
