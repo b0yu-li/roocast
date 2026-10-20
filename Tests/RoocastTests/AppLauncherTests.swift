@@ -100,4 +100,47 @@ final class AppLauncherTests: XCTestCase {
         XCTAssertTrue(results.contains { $0.kind == .quit })
         XCTAssertEqual(results.first?.kind, .quit)
     }
+
+    // MARK: - Intention Score Tests
+
+    func testIntentionScorePrefersPrefixOverSubstring() {
+        // Typing "no" should intend Notes, not Keynote (mid-string "no").
+        let notes = IntentionScore.score(query: "no", name: "Notes", searchText: "Notes")
+        let keynote = IntentionScore.score(query: "no", name: "Keynote", searchText: "Keynote")
+        XCTAssertGreaterThan(notes, keynote)
+        XCTAssertGreaterThan(notes, 0)
+        XCTAssertGreaterThan(keynote, 0)
+    }
+
+    func testIntentionScoreExactBeatsPrefix() {
+        let exact = IntentionScore.score(query: "notes", name: "Notes", searchText: "Notes")
+        let prefix = IntentionScore.score(query: "no", name: "Notes", searchText: "Notes")
+        XCTAssertGreaterThan(exact, prefix)
+    }
+
+    func testIntentionScorePrefersShorterPrefixMatch() {
+        let notes = IntentionScore.score(query: "no", name: "Notes", searchText: "Notes")
+        let notebook = IntentionScore.score(query: "no", name: "Notebook", searchText: "Notebook")
+        XCTAssertGreaterThan(notes, notebook)
+    }
+
+    func testIntentionScoreNoMatchIsZero() {
+        XCTAssertEqual(IntentionScore.score(query: "xyz", name: "Notes", searchText: "Notes"), 0)
+        XCTAssertEqual(IntentionScore.score(query: "", name: "Notes", searchText: "Notes"), 0)
+    }
+
+    func testIntentionScoreProfileWordPrefix() {
+        let work = IntentionScore.score(
+            query: "wor",
+            name: "Firefox",
+            searchText: "Firefox work"
+        )
+        let personal = IntentionScore.score(
+            query: "wor",
+            name: "Firefox",
+            searchText: "Firefox personal"
+        )
+        XCTAssertGreaterThan(work, 0)
+        XCTAssertEqual(personal, 0)
+    }
 }

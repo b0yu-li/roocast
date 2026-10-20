@@ -144,9 +144,18 @@ final class AppIndex: ObservableObject {
         if Self.matchesQuitCommand(lowered) {
             results.append(.quitRoocast)
         }
-        results.append(contentsOf: apps.filter { app in
-            app.searchText.lowercased().contains(lowered)
-        })
+
+        // Rank by intention score (prefix > mid-string) so "no" prefers Notes over Keynote.
+        let ranked = apps
+            .map { ($0, IntentionScore.score(query: lowered, app: $0)) }
+            .filter { $0.1 > 0 }
+            .sorted { lhs, rhs in
+                if lhs.1 != rhs.1 { return lhs.1 > rhs.1 }
+                return lhs.0.name.localizedCaseInsensitiveCompare(rhs.0.name) == .orderedAscending
+            }
+            .map(\.0)
+
+        results.append(contentsOf: ranked)
         return results
     }
 
