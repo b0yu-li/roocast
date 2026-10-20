@@ -169,15 +169,20 @@ struct AppRow: View {
                         .frame(width: 32, height: 32)
                 }
                 
-                // Running indicator dot
+                // Running indicator — white on selected row (accent bg), accent otherwise
                 if app.isRunning {
                     Circle()
-                        .fill(Color.accentColor)
-                        .frame(width: 4, height: 4)
+                        .fill(isSelected ? Color.white : Color.accentColor)
+                        .frame(width: 6, height: 6)
+                        .shadow(
+                            color: isSelected ? Color.black.opacity(0.25) : Color.clear,
+                            radius: 0.5,
+                            y: 0.5
+                        )
                 } else {
                     Circle()
                         .fill(Color.clear)
-                        .frame(width: 4, height: 4)
+                        .frame(width: 6, height: 6)
                 }
             }
 
