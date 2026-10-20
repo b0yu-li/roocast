@@ -139,6 +139,13 @@ struct ContentView: View {
             NSApplication.shared.terminate(nil)
             return
         }
+
+        if app.kind == .folder {
+            NSWorkspace.shared.open(URL(fileURLWithPath: app.path, isDirectory: true))
+            query = ""
+            onDismiss()
+            return
+        }
         
         // If this is a Firefox profile, handle profile-specific launch
         if let profile = app.profile {
