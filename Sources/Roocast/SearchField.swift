@@ -63,18 +63,51 @@ class CustomTextField: NSTextField {
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onEnterKey: (() -> Void)?
-    
+
     override func keyDown(with event: NSEvent) {
         switch event.keyCode {
-        case 126: // Up arrow
+        case KeyCode.upArrow:
             onArrowUp?()
-        case 125: // Down arrow
+        case KeyCode.downArrow:
             onArrowDown?()
-        case 36: // Return/Enter
+        case KeyCode.returnKey:
             onEnterKey?()
         default:
             super.keyDown(with: event)
         }
+    }
+
+    /// Accessory apps have no Edit menu, so ⌘C / ⌘X / ⌘V / ⌘A never reach the
+    /// field editor unless we handle them here. Needed so users can copy/cut
+    /// selected search text (e.g. spaces) to flush the system pasteboard.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.type == .keyDown,
+              event.modifierFlags.contains(.command),
+              !event.modifierFlags.contains(.option),
+              !event.modifierFlags.contains(.control)
+        else {
+            return super.performKeyEquivalent(with: event)
+        }
+
+        let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
+        let action: Selector?
+        switch key {
+        case "c":
+            action = #selector(NSText.copy(_:))
+        case "x":
+            action = #selector(NSText.cut(_:))
+        case "v":
+            action = #selector(NSText.paste(_:))
+        case "a":
+            action = #selector(NSText.selectAll(_:))
+        default:
+            action = nil
+        }
+
+        if let action, NSApp.sendAction(action, to: nil, from: self) {
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
     }
 }
 
