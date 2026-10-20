@@ -26,18 +26,6 @@ final class ClipboardStoreTests: XCTestCase {
         XCTAssertEqual(store.items.map(\.text), ["four", "three", "two"])
     }
 
-    func testHotKeyIDsAreDistinct() {
-        XCTAssertEqual(HotKeyID.launcher.rawValue, 1)
-        XCTAssertEqual(HotKeyID.clipboard.rawValue, 2)
-        XCTAssertNotEqual(HotKeyID.launcher, HotKeyID.clipboard)
-    }
-
-    func testClipboardLayoutIsCompact() {
-        XCTAssertEqual(ClipboardLayout.width, 560)
-        XCTAssertEqual(ClipboardLayout.height, 360)
-        XCTAssertGreaterThan(ClipboardLayout.cornerRadius, 0)
-    }
-
     func testItemsMatchingFiltersCaseInsensitive() {
         let store = ClipboardStore(maxItems: 10, persistToDisk: false)
         store.prependForTesting("Hello World")

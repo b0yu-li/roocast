@@ -26,7 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupClipboardPanel()
         setupHotKey()
         clipboardStore.startMonitoring()
-        showPanel()
+        panel?.show()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -34,65 +34,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupPanel() {
-        panel = LauncherPanel(navigationState: navigationState)
-
-        panel?.onArrowUp = { [weak self] in
-            Task { @MainActor in
-                self?.navigationState.moveUp()
-            }
-        }
-        panel?.onArrowDown = { [weak self] in
-            Task { @MainActor in
-                self?.navigationState.moveDown()
-            }
-        }
-        panel?.onEnter = {
-            Task { @MainActor in
-                NotificationCenter.default.post(name: .launchSelectedApp, object: nil)
-            }
-        }
+        let panel = LauncherPanel(navigationState: navigationState)
+        wireNavigation(panel, state: navigationState, enterNotification: .launchSelectedApp)
+        self.panel = panel
     }
 
     private func setupClipboardPanel() {
-        clipboardPanel = ClipboardPanel(
+        let clipboardPanel = ClipboardPanel(
             store: clipboardStore,
             navigationState: clipboardNavigationState,
             onPaste: { [weak self] item in
                 self?.pasteClipboardItem(item)
             }
         )
+        wireNavigation(
+            clipboardPanel,
+            state: clipboardNavigationState,
+            enterNotification: .pasteSelectedClipboardItem
+        )
+        self.clipboardPanel = clipboardPanel
+    }
 
-        clipboardPanel?.onArrowUp = { [weak self] in
-            Task { @MainActor in
-                self?.clipboardNavigationState.moveUp()
-            }
+    private func wireNavigation(
+        _ panel: FloatingPanel,
+        state: NavigationState,
+        enterNotification: Notification.Name
+    ) {
+        panel.onArrowUp = { [weak state] in
+            state?.moveUp()
         }
-        clipboardPanel?.onArrowDown = { [weak self] in
-            Task { @MainActor in
-                self?.clipboardNavigationState.moveDown()
-            }
+        panel.onArrowDown = { [weak state] in
+            state?.moveDown()
         }
-        clipboardPanel?.onEnter = {
-            Task { @MainActor in
-                NotificationCenter.default.post(name: .pasteSelectedClipboardItem, object: nil)
-            }
+        panel.onEnter = {
+            NotificationCenter.default.post(name: enterNotification, object: nil)
         }
     }
 
     private func setupHotKey() {
+        // Carbon hotkey callbacks may arrive off the main actor — hop explicitly.
         hotKeyManager = HotKeyManager(
             onLauncherToggle: { [weak self] in
-                self?.togglePanel()
+                Task { @MainActor in
+                    self?.togglePanel()
+                }
             },
             onClipboardToggle: { [weak self] in
-                self?.toggleClipboardPanel()
+                Task { @MainActor in
+                    self?.toggleClipboardPanel()
+                }
             }
         )
     }
 
     private func togglePanel() {
         guard let panel else { return }
-        // Mutually exclusive with clipboard panel.
         if clipboardPanel?.isVisible == true {
             clipboardPanel?.hide(restoreFocus: false)
         }
@@ -123,11 +119,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Give the target app a beat to become frontmost before synthesizing ⌘V.
         let delay: TimeInterval = target == nil ? 0.12 : 0.08
         ClipboardPaster.pasteCommandV(after: delay)
-    }
-
-    private func showPanel() {
-        guard let panel else { return }
-        panel.show()
     }
 }
 
