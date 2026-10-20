@@ -33,15 +33,18 @@ final class AppIndex: ObservableObject {
     @Published private var apps: [AppItem] = []
 
     init() {
-        indexApps()
+        // Index off the critical path so panel creation never blocks on disk I/O.
+        Task { await indexApps() }
     }
 
-    func indexApps() {
-        let found = Self.scanApps()
+    func indexApps() async {
+        let found = await Task.detached(priority: .userInitiated) {
+            Self.scanApps()
+        }.value
         self.apps = found
     }
 
-    private static func scanApps() -> [AppItem] {
+    private nonisolated static func scanApps() -> [AppItem] {
         var found: [AppItem] = []
         
         // Get list of running app bundle paths

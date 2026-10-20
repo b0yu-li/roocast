@@ -92,14 +92,16 @@ struct ProfileManager {
     
     // MARK: - Running Instance Detection
     
+    /// Detect which Firefox profiles are currently running.
+    /// Uses profile lock files only — never shells out to `ps`/`pgrep`.
+    /// Spawning Process + Pipe on the main thread previously deadlocked startup
+    /// when `ps aux` filled the pipe buffer before `waitUntilExit` could return.
     static func detectRunningProfiles() -> [String: FirefoxProfile] {
         let profiles = detectFirefoxProfiles()
-        let runningProfiles = detectRunningProfilePaths()
-        
         var result: [String: FirefoxProfile] = [:]
         
         for profile in profiles {
-            if runningProfiles.contains(profile.path.path) {
+            if isProfileRunning(profile) {
                 result[profile.name] = profile
             }
         }
@@ -107,93 +109,23 @@ struct ProfileManager {
         return result
     }
     
-    private static func detectRunningProfilePaths() -> Set<String> {
-        var profilePaths = Set<String>()
-        
-        // Method 1: Check lock files (fast path)
-        let profiles = detectFirefoxProfiles()
-        for profile in profiles {
-            let lockFile = profile.path.appendingPathComponent("lock")
+    /// Firefox writes `lock` / `.parentlock` while a profile is in use.
+    private static func isProfileRunning(_ profile: FirefoxProfile) -> Bool {
+        let candidates = ["lock", ".parentlock"]
+        for name in candidates {
+            let lockFile = profile.path.appendingPathComponent(name)
             if FileManager.default.fileExists(atPath: lockFile.path) {
-                profilePaths.insert(profile.path.path)
+                return true
             }
         }
-        
-        // Method 2: Scan processes (fallback) - with timeout to prevent hanging
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/bin/ps")
-        task.arguments = ["aux"]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-        
-        do {
-            try task.run()
-            
-            // Wait with timeout (2 seconds max) using DispatchQueue
-            let group = DispatchGroup()
-            group.enter()
-            
-            DispatchQueue.global().async {
-                task.waitUntilExit()
-                group.leave()
-            }
-            
-            let timeoutResult = group.wait(timeout: .now() + 2.0)
-            
-            if timeoutResult == .success {
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                if let output = String(data: data, encoding: .utf8) {
-                    // Look for -profile arguments in process list
-                    let lines = output.components(separatedBy: .newlines)
-                    for line in lines {
-                        if let range = line.range(of: "-profile ") {
-                            let afterProfile = line[range.upperBound...]
-                            if let spaceRange = afterProfile.range(of: " ") {
-                                let profilePath = String(afterProfile[afterProfile.startIndex..<spaceRange.lowerBound])
-                                profilePaths.insert(profilePath)
-                            } else {
-                                profilePaths.insert(String(afterProfile))
-                            }
-                        }
-                    }
-                }
-            } else {
-                // Timeout - kill the process
-                task.terminate()
-            }
-        } catch {
-            // Process scanning failed, rely on lock files only
-        }
-        
-        return profilePaths
+        return false
     }
     
     // MARK: - Instance Count
     
     static func countFirefoxInstances() -> Int {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
-        task.arguments = ["-f", "firefox -foreground"]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-        
-        do {
-            try task.run()
-            task.waitUntilExit()
-            
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8) {
-                let lines = output.components(separatedBy: .newlines).filter { !$0.isEmpty }
-                return lines.count
-            }
-        } catch {
-            // Failed to count
-        }
-        
-        return 0
+        NSWorkspace.shared.runningApplications
+            .filter { $0.bundleIdentifier == "org.mozilla.firefox" }
+            .count
     }
 }
