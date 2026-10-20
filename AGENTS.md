@@ -41,16 +41,16 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 
 ### 3. Less Is More
 
-- **Focused scope.** A launcher launches things. It does not manage your calendar, your CRM, or your soul.
+- **Focused scope.** A launcher launches things — and keeps a light clipboard history. It does not manage your calendar, your CRM, or your soul.
 - **No plugin marketplace.** Extensions are built-in or not supported. Complexity is the enemy of performance.
 - **No network calls for core functionality.** Everything the launcher needs lives on-device. Extensions that need the network are opt-in and async.
-- **No telemetry.** We don't track you. We don't phone home. Your keystrokes are yours.
+- **No telemetry.** We don't track you. We don't phone home. Your keystrokes and clipboard are yours.
 
 ### 4. Resource Consciousness
 
 - **Every byte matters.** We measure RSS, not just allocations. Instruments is a daily tool, not a debugging afterthought.
 - **Lazy everything.** Load extensions on demand. Cache aggressively but with bounded memory. Evict proactively.
-- **No background daemons.** When the launcher is dismissed, it's gone. No menubar icon, no hidden processes, no "quick launch" services running 24/7.
+- **No background daemons.** One accessory process owns global hotkeys and clipboard monitoring — no menubar icon, no extra helpers, no wake-on-network.
 - **Sleep-friendly.** When macOS sleeps, we sleep. No wake-on-network, no prevent-idle assertions.
 
 ### 5. macOS Citizenship
@@ -72,9 +72,9 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 ├─────────────────────────────────┤
 │        ViewModels (Combine)     │  ← Reactive state, search, filtering
 ├─────────────────────────────────┤
-│         Core Services           │  ← App discovery, window mgmt, extensions
+│         Core Services           │  ← App discovery, clipboard, extensions
 ├─────────────────────────────────┤
-│       System Integration        │  ← NSPanel, Accessibility, ScriptingBridge
+│       System Integration        │  ← NSPanel, Accessibility, global hotkeys
 └─────────────────────────────────┘
 ```
 
@@ -120,15 +120,19 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 
 ---
 
+## What Roocast Is
+
+- **Launcher** — ⌘Space summons app/folder search (global hotkey).
+- **Clipboard history** — ⌘Esc summons recent pasteboard items (global hotkey, same process).
+
 ## What Roocast Is NOT
 
 - Not a window manager (use Rectangle or Magnet)
-- Not a clipboard manager (use Maccy or Paste)
 - Not a snippet expander (use TextExpander or Espanso)
 - Not a workflow automator (use Shortcuts or Keyboard Maestro)
 - Not a replacement for Spotlight's file search (use HoudahSpot or find)
 
-Roocast is a **launcher**. It launches apps, finds files, runs commands, and executes extensions. That's it. That's the whole product.
+Roocast is a **launcher with clipboard history**. It launches apps, finds files, runs commands, and recalls what you copied. That's it.
 
 ---
 
@@ -155,9 +159,9 @@ roocast/
 ├── Roocast/
 │   ├── App/               ← App entry point, lifecycle
 │   ├── UI/                ← SwiftUI views, materials, components
-│   ├── Core/              ← Search engine, app discovery, indexing
+│   ├── Core/              ← Search engine, app discovery, clipboard store
 │   ├── Extensions/        ← Extension protocol + built-in extensions
-│   ├── Services/          ← Window management, hotkey, accessibility
+│   ├── Services/          ← Window management, hotkeys (⌘Space / ⌘Esc), accessibility
 │   └── Resources/         ← Assets, localization
 ├── RoocastTests/
 ├── RoocastUITests/
