@@ -122,6 +122,12 @@ struct ContentView: View {
         guard navigationState.selectedIndex < filteredApps.count else { return }
         
         let app = filteredApps[navigationState.selectedIndex]
+
+        if app.kind == .quit {
+            query = ""
+            NSApplication.shared.terminate(nil)
+            return
+        }
         
         // If this is a Firefox profile, handle profile-specific launch
         if let profile = app.profile {

@@ -2,12 +2,18 @@ import SwiftUI
 import AppKit
 
 struct AppItem: Identifiable, Hashable {
+    enum Kind: Hashable {
+        case app
+        case quit
+    }
+
     let id: UUID
     let name: String
     let path: String
     let icon: NSImage?
     let isRunning: Bool
     let profile: String?  // Profile name for multi-instance apps (e.g., Firefox)
+    let kind: Kind
 
     init(url: URL, isRunning: Bool = false, profile: String? = nil) {
         self.id = UUID()
@@ -17,8 +23,45 @@ struct AppItem: Identifiable, Hashable {
         self.icon?.size = NSSize(width: 32, height: 32)
         self.isRunning = isRunning
         self.profile = profile
+        self.kind = .app
     }
-    
+
+    private init(
+        id: UUID,
+        name: String,
+        path: String,
+        icon: NSImage?,
+        isRunning: Bool,
+        profile: String?,
+        kind: Kind
+    ) {
+        self.id = id
+        self.name = name
+        self.path = path
+        self.icon = icon
+        self.isRunning = isRunning
+        self.profile = profile
+        self.kind = kind
+    }
+
+    /// Built-in command: quit the Roocast process. Stable id so list selection stays stable.
+    static let quitRoocast: AppItem = {
+        let icon = NSImage(
+            systemSymbolName: "power.circle.fill",
+            accessibilityDescription: "Quit Roocast"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: UUID(uuidString: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890")!,
+            name: "Quit Roocast",
+            path: "Command",
+            icon: icon,
+            isRunning: false,
+            profile: nil,
+            kind: .quit
+        )
+    }()
+
     // Searchable text includes profile name
     var searchText: String {
         if let profile = profile {
@@ -94,10 +137,23 @@ final class AppIndex: ObservableObject {
     }
 
     func search(_ query: String) -> [AppItem] {
-        guard !query.isEmpty else { return [] }
-        let lowered = query.lowercased()
-        return apps.filter { app in
-            app.searchText.lowercased().contains(lowered)
+        let lowered = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !lowered.isEmpty else { return [] }
+
+        var results: [AppItem] = []
+        if Self.matchesQuitCommand(lowered) {
+            results.append(.quitRoocast)
         }
+        results.append(contentsOf: apps.filter { app in
+            app.searchText.lowercased().contains(lowered)
+        })
+        return results
+    }
+
+    /// Matches as the user types toward "quit" / "quit roocast".
+    nonisolated static func matchesQuitCommand(_ query: String) -> Bool {
+        let lowered = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !lowered.isEmpty else { return false }
+        return "quit".hasPrefix(lowered) || "quit roocast".hasPrefix(lowered)
     }
 }

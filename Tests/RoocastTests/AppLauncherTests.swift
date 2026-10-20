@@ -74,4 +74,30 @@ final class AppLauncherTests: XCTestCase {
         
         XCTAssertTrue(true, "Would test profile name filtering")
     }
+
+    // MARK: - Quit Command Tests
+
+    func testQuitCommandMatchesPrefixes() {
+        XCTAssertTrue(AppIndex.matchesQuitCommand("q"))
+        XCTAssertTrue(AppIndex.matchesQuitCommand("qui"))
+        XCTAssertTrue(AppIndex.matchesQuitCommand("quit"))
+        XCTAssertTrue(AppIndex.matchesQuitCommand("Quit"))
+        XCTAssertTrue(AppIndex.matchesQuitCommand("quit roo"))
+        XCTAssertFalse(AppIndex.matchesQuitCommand(""))
+        XCTAssertFalse(AppIndex.matchesQuitCommand("safari"))
+        XCTAssertFalse(AppIndex.matchesQuitCommand("quite"))
+    }
+
+    func testQuitCommandItemKind() {
+        XCTAssertEqual(AppItem.quitRoocast.kind, .quit)
+        XCTAssertEqual(AppItem.quitRoocast.name, "Quit Roocast")
+    }
+
+    @MainActor
+    func testSearchReturnsQuitCommand() {
+        let index = AppIndex()
+        let results = index.search("quit")
+        XCTAssertTrue(results.contains { $0.kind == .quit })
+        XCTAssertEqual(results.first?.kind, .quit)
+    }
 }
