@@ -24,9 +24,44 @@ final class AppSearchTests: XCTestCase {
         XCTAssertTrue(results.contains { $0.name == "Quitter" })
     }
 
-    func testResultsEmptyQueryIsEmpty() {
-        XCTAssertTrue(AppSearch.results(query: "", apps: [AppItem.stub(name: "Notes")]).isEmpty)
-        XCTAssertTrue(AppSearch.results(query: "   ", apps: [AppItem.stub(name: "Notes")]).isEmpty)
+    func testResultsEmptyQueryShowsRunningSwitchSuggestions() {
+        let apps = [
+            AppItem.stub(name: "Notes", path: "/Applications/Notes.app", isRunning: false),
+            AppItem.stub(name: "Slack", path: "/Applications/Slack.app", isRunning: true),
+            AppItem.stub(name: "Ghostty", path: "/Applications/Ghostty.app", isRunning: true),
+        ]
+        let results = AppSearch.results(
+            query: "",
+            apps: apps,
+            frontmostPath: "/Applications/Ghostty.app"
+        )
+        XCTAssertEqual(results.map(\.name), ["Slack"])
+        XCTAssertTrue(
+            AppSearch.results(query: "   ", apps: apps, frontmostPath: "/Applications/Ghostty.app")
+                .map(\.name) == ["Slack"]
+        )
+    }
+
+    func testResultsEmptyQueryNoRunningIsEmpty() {
+        XCTAssertTrue(
+            AppSearch.results(
+                query: "",
+                apps: [AppItem.stub(name: "Notes", isRunning: false)]
+            ).isEmpty
+        )
+    }
+
+    func testResultsEmptyQueryExcludesSelfLauncher() {
+        let apps = [
+            AppItem.stub(name: "Roocast", path: "/Applications/Roocast.app", isRunning: true),
+            AppItem.stub(name: "Slack", path: "/Applications/Slack.app", isRunning: true),
+        ]
+        let results = AppSearch.results(
+            query: "",
+            apps: apps,
+            selfPath: "/Applications/Roocast.app"
+        )
+        XCTAssertEqual(results.map(\.name), ["Slack"])
     }
 
     func testRankPrefersNotesOverKeynoteForNo() {
@@ -106,10 +141,22 @@ final class AppSearchTests: XCTestCase {
         XCTAssertEqual(results.first?.kind, .folder)
     }
 
-    func testResultsEmptyQueryStillEmptyWithFolders() {
+    func testResultsEmptyQueryIgnoresFolders() {
         let folders = [AppItem.folderStub(name: "Downloads")]
-        XCTAssertTrue(
-            AppSearch.results(query: "", apps: [AppItem.stub(name: "Notes")], folders: folders).isEmpty
-        )
+        let apps = [
+            AppItem.stub(name: "Slack", path: "/Applications/Slack.app", isRunning: true),
+        ]
+        let results = AppSearch.results(query: "", apps: apps, folders: folders)
+        XCTAssertEqual(results.map(\.name), ["Slack"])
+        XCTAssertFalse(results.contains { $0.kind == .folder })
+    }
+
+    func testSwitchSuggestionsPreferShorterName() {
+        let apps = [
+            AppItem.stub(name: "Notebook", path: "/Applications/Notebook.app", isRunning: true),
+            AppItem.stub(name: "Notes", path: "/Applications/Notes.app", isRunning: true),
+        ]
+        let ranked = AppSearch.switchSuggestions(apps: apps)
+        XCTAssertEqual(ranked.first?.name, "Notes")
     }
 }

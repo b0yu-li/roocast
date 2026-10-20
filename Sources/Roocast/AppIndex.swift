@@ -165,9 +165,14 @@ final class AppIndex: ObservableObject {
     private nonisolated static func scanApps() -> [AppItem] {
         var found: [AppItem] = []
         
-        // Get list of running app bundle paths
-        let runningApps = NSWorkspace.shared.runningApplications
-        let runningBundlePaths = Set(runningApps.compactMap { $0.bundleURL?.path })
+        // Only `.regular` apps count as running for indicators / switch suggestions.
+        // Background agents (e.g. Books with `.prohibited`) stay in the process list
+        // without a switchable UI; accessory apps (Roocast) are not switch targets.
+        let runningBundlePaths = Set(
+            NSWorkspace.shared.runningApplications
+                .filter { $0.activationPolicy == .regular }
+                .compactMap { $0.bundleURL?.path }
+        )
         
         // Detect Firefox profiles once; running state uses the same list (no double detect).
         let firefoxProfiles = ProfileManager.detectFirefoxProfiles()
@@ -220,7 +225,15 @@ final class AppIndex: ObservableObject {
     }
 
     func search(_ query: String) -> [AppItem] {
-        AppSearch.results(query: query, apps: apps)
+        // Nonactivating panel keeps the prior app frontmost — use it to drop
+        // the app the user is already in from empty-query switch suggestions.
+        let frontmostPath = NSWorkspace.shared.frontmostApplication?.bundleURL?.path
+        return AppSearch.results(
+            query: query,
+            apps: apps,
+            frontmostPath: frontmostPath,
+            selfPath: Bundle.main.bundlePath
+        )
     }
 
     /// Matches as the user types toward "quit" / "quit roocast".

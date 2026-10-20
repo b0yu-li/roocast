@@ -52,4 +52,49 @@ final class IntentionScoreTests: XCTestCase {
             IntentionScore.score(query: "no", app: keynote)
         )
     }
+
+    func testSwitchScoreOnlyRunningApps() {
+        let running = AppItem.stub(name: "Slack", path: "/Applications/Slack.app", isRunning: true)
+        let idle = AppItem.stub(name: "Notes", path: "/Applications/Notes.app", isRunning: false)
+        XCTAssertGreaterThan(IntentionScore.switchScore(app: running, frontmostPath: nil), 0)
+        XCTAssertEqual(IntentionScore.switchScore(app: idle, frontmostPath: nil), 0)
+    }
+
+    func testSwitchScoreExcludesFrontmostRegularApp() {
+        let path = "/Applications/Ghostty.app"
+        let front = AppItem.stub(name: "Ghostty", path: path, isRunning: true)
+        let other = AppItem.stub(name: "Slack", path: "/Applications/Slack.app", isRunning: true)
+        XCTAssertEqual(IntentionScore.switchScore(app: front, frontmostPath: path), 0)
+        XCTAssertGreaterThan(IntentionScore.switchScore(app: other, frontmostPath: path), 0)
+    }
+
+    func testSwitchScoreKeepsFirefoxProfilesWhenFirefoxFrontmost() {
+        let firefoxPath = "/Applications/Firefox.app"
+        let work = AppItem.stub(name: "Firefox", profile: "work", path: firefoxPath, isRunning: true)
+        let personal = AppItem.stub(
+            name: "Firefox",
+            profile: "personal",
+            path: firefoxPath,
+            isRunning: true
+        )
+        XCTAssertGreaterThan(IntentionScore.switchScore(app: work, frontmostPath: firefoxPath), 0)
+        XCTAssertGreaterThan(
+            IntentionScore.switchScore(app: personal, frontmostPath: firefoxPath),
+            0
+        )
+    }
+
+    func testSwitchScoreExcludesSelfLauncher() {
+        let selfPath = "/Applications/Roocast.app"
+        let selfApp = AppItem.stub(name: "Roocast", path: selfPath, isRunning: true)
+        let other = AppItem.stub(name: "Slack", path: "/Applications/Slack.app", isRunning: true)
+        XCTAssertEqual(
+            IntentionScore.switchScore(app: selfApp, frontmostPath: nil, selfPath: selfPath),
+            0
+        )
+        XCTAssertGreaterThan(
+            IntentionScore.switchScore(app: other, frontmostPath: nil, selfPath: selfPath),
+            0
+        )
+    }
 }

@@ -49,4 +49,41 @@ enum IntentionScore {
     nonisolated static func score(query: String, app: AppItem) -> Int {
         score(query: query, name: app.name, searchText: app.searchText)
     }
+
+    /// Empty-query switch intention: how likely the user wants to jump to this app.
+    ///
+    /// Only running apps score. Excludes:
+    /// - the frontmost regular app (no profile) — you're already there
+    /// - Roocast itself (`selfPath`) — the launcher is already open
+    ///
+    /// Firefox profile rows keep scoring so you can jump between profiles even when
+    /// Firefox is frontmost.
+    ///
+    /// - Parameter frontmostPath: Bundle path of the frontmost app, if known.
+    /// - Parameter selfPath: Bundle path of this launcher, if known.
+    nonisolated static func switchScore(
+        app: AppItem,
+        frontmostPath: String?,
+        selfPath: String? = nil
+    ) -> Int {
+        guard app.kind == .app, app.isRunning else { return 0 }
+
+        if let selfPath, app.path == selfPath {
+            return 0
+        }
+
+        if let frontmostPath,
+           app.profile == nil,
+           app.path == frontmostPath {
+            return 0
+        }
+
+        // Same shorter-name preference as typed prefix ranking (Notes before Notebook).
+        var score = 50_000 - min(app.name.count, 10_000)
+        // Profile rows are explicit switch targets when multi-instance apps are running.
+        if app.profile != nil {
+            score += 1_000
+        }
+        return score
+    }
 }

@@ -16,8 +16,7 @@ struct ContentView: View {
     let onDismiss: () -> Void
 
     var filteredApps: [AppItem] {
-        guard !query.isEmpty else { return [] }
-        return appIndex.search(query)
+        appIndex.search(query)
     }
 
     var body: some View {
@@ -51,21 +50,16 @@ struct ContentView: View {
             ZStack(alignment: .bottomTrailing) {
                 ScrollView {
                     LazyVStack(spacing: 1) {
-                        if query.isEmpty {
+                        if filteredApps.isEmpty {
                             VStack(spacing: 6) {
-                                Image(systemName: "keyboard")
+                                Image(systemName: query.isEmpty ? "keyboard" : "magnifyingglass")
                                     .font(.system(size: 22, weight: .light))
                                     .foregroundStyle(.tertiary)
-                                Text("Start typing to search…")
+                                Text(query.isEmpty ? "Start typing to search…" : "No results")
                                     .font(.system(size: 13))
                                     .foregroundStyle(.tertiary)
                             }
                             .padding(.top, 36)
-                        } else if filteredApps.isEmpty {
-                            Text("No results")
-                                .font(.system(size: 13))
-                                .foregroundStyle(.tertiary)
-                                .padding(.top, 28)
                         } else {
                             ForEach(Array(filteredApps.enumerated()), id: \.element.id) { index, app in
                                 AppRow(app: app, isSelected: index == navigationState.selectedIndex)
@@ -105,6 +99,7 @@ struct ContentView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 isSearchFocused = true
             }
+            syncNavigation()
             
             // Listen for launch notification
             NotificationCenter.default.addObserver(
@@ -116,16 +111,23 @@ struct ContentView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .launcherWillShow)) { _ in
-            Task { await appIndex.indexApps() }
+            Task {
+                await appIndex.indexApps()
+                syncNavigation()
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 isSearchFocused = true
             }
         }
         .onChange(of: query) { _, _ in
-            navigationState.reset()
-            navigationState.maxIndex = max(0, filteredApps.count - 1)
+            syncNavigation()
         }
         .environmentObject(navigationState)
+    }
+
+    private func syncNavigation() {
+        navigationState.reset()
+        navigationState.maxIndex = max(0, filteredApps.count - 1)
     }
 
     private func launchSelectedApp() {
