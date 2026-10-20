@@ -132,7 +132,9 @@ struct ContentView: View {
                 NSWorkspace.shared.open(url)
             }
         }
-        
+
+        // Clear so the next open starts with an empty search field
+        query = ""
         onDismiss()
     }
 }
