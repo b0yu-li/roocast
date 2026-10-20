@@ -1,15 +1,17 @@
 #!/bin/bash
 set -euo pipefail
 
-# Dev reinstall: stop running Roocast, install latest build, launch it.
+# Dev reinstall: stop running Roocast, build + install to /Applications, launch it.
 # Usage: ./dev-install.sh [--no-launch]
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "${ROOT}"
 
 APP_NAME="Roocast"
-BUNDLE="${APP_NAME}.app"
-INSTALL_PATH="/Applications/${BUNDLE}"
+INSTALL_DIR="/Applications"
+BUILD_DIR=".build/release"
+BUNDLE_NAME="${APP_NAME}.app"
+INSTALL_PATH="${INSTALL_DIR}/${BUNDLE_NAME}"
 LAUNCH=1
 
 for arg in "$@"; do
@@ -55,14 +57,68 @@ else
     echo "   Not running."
 fi
 
-"${ROOT}/install.sh"
+echo "🔨 Building ${APP_NAME} in release mode..."
+swift build -c release
+
+echo "📦 Creating app bundle..."
+rm -rf "${BUILD_DIR}/${BUNDLE_NAME}"
+mkdir -p "${BUILD_DIR}/${BUNDLE_NAME}/Contents/MacOS"
+mkdir -p "${BUILD_DIR}/${BUNDLE_NAME}/Contents/Resources"
+
+cp "${BUILD_DIR}/${APP_NAME}" "${BUILD_DIR}/${BUNDLE_NAME}/Contents/MacOS/${APP_NAME}"
+
+# Keep Info.plist version in sync with Sources/Roocast/Version.swift
+VERSION=$(python3 - <<'PY'
+import re, pathlib
+text = pathlib.Path("Sources/Roocast/Version.swift").read_text()
+major = re.search(r"static let major = (\d+)", text).group(1)
+minor = re.search(r"static let minor = (\d+)", text).group(1)
+patch = re.search(r"static let patch = (\d+)", text).group(1)
+print(f"{major}.{minor}.{patch}")
+PY
+)
+
+cat > "${BUILD_DIR}/${BUNDLE_NAME}/Contents/Info.plist" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>${APP_NAME}</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.roocast.app</string>
+    <key>CFBundleName</key>
+    <string>${APP_NAME}</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>${VERSION}</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+</dict>
+</plist>
+EOF
+
+echo "📋 Installing to ${INSTALL_DIR}..."
+if [ -d "${INSTALL_PATH}" ]; then
+    echo "   Removing old installation..."
+    rm -rf "${INSTALL_PATH}"
+fi
+cp -R "${BUILD_DIR}/${BUNDLE_NAME}" "${INSTALL_DIR}/"
+
+echo "✅ ${APP_NAME} ${VERSION} installed to ${INSTALL_PATH}"
 
 if [ "${LAUNCH}" -eq 1 ]; then
     echo "🚀 Launching ${INSTALL_PATH}..."
     open "${INSTALL_PATH}"
     sleep 0.5
     if pgrep -x "${APP_NAME}" >/dev/null 2>&1; then
-        VERSION=$(defaults read "${INSTALL_PATH}/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null || echo "?")
         echo "✅ ${APP_NAME} ${VERSION} is running (CMD+Space to toggle)."
     else
         echo "⚠️  Installed, but process did not stay up — check Console.app for crashes." >&2
