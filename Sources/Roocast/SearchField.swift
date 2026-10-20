@@ -8,7 +8,7 @@ struct SearchField: NSViewRepresentable {
     func makeNSView(context: Context) -> CustomTextField {
         let textField = CustomTextField()
         textField.placeholderString = "Search apps, files, commands…"
-        textField.font = NSFont.systemFont(ofSize: 24, weight: .regular)
+        textField.font = NSFont.systemFont(ofSize: 18, weight: .regular)
         textField.isBordered = false
         textField.backgroundColor = .clear
         textField.focusRingType = .none

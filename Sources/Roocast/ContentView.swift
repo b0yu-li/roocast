@@ -1,18 +1,19 @@
 import SwiftUI
 import AppKit
 
+/// Shared panel geometry — keep `LauncherPanel` and SwiftUI content in sync.
+enum LauncherLayout {
+    static let width: CGFloat = 640
+    static let height: CGFloat = 400
+    static let cornerRadius: CGFloat = 10
+}
+
 struct ContentView: View {
     @State private var query = ""
     @ObservedObject var navigationState: NavigationState
     @StateObject private var appIndex = AppIndex()
     @FocusState private var isSearchFocused: Bool
     let onDismiss: () -> Void
-
-    private enum Layout {
-        static let width: CGFloat = 860
-        static let height: CGFloat = 560
-        static let cornerRadius: CGFloat = 12
-    }
 
     var filteredApps: [AppItem] {
         guard !query.isEmpty else { return [] }
@@ -22,49 +23,49 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Search field area
-            HStack(spacing: 14) {
+            HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 22, weight: .medium))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(isSearchFocused ? Color.accentColor : .secondary)
 
                 SearchField(text: $query, onSubmit: {
                     launchSelectedApp()
                 })
-                .frame(height: 40)
+                .frame(height: 28)
 
                 if !query.isEmpty {
                     Button(action: { query = "" }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16))
+                            .font(.system(size: 14))
                             .foregroundStyle(.tertiary)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 20)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
 
             Divider()
 
             // Results area
             ZStack(alignment: .bottomTrailing) {
                 ScrollView {
-                    LazyVStack(spacing: 2) {
+                    LazyVStack(spacing: 1) {
                         if query.isEmpty {
-                            VStack(spacing: 8) {
+                            VStack(spacing: 6) {
                                 Image(systemName: "keyboard")
-                                    .font(.system(size: 28, weight: .light))
+                                    .font(.system(size: 22, weight: .light))
                                     .foregroundStyle(.tertiary)
                                 Text("Start typing to search…")
-                                    .font(.system(size: 15))
+                                    .font(.system(size: 13))
                                     .foregroundStyle(.tertiary)
                             }
-                            .padding(.top, 60)
+                            .padding(.top, 36)
                         } else if filteredApps.isEmpty {
                             Text("No results")
-                                .font(.system(size: 15))
+                                .font(.system(size: 13))
                                 .foregroundStyle(.tertiary)
-                                .padding(.top, 40)
+                                .padding(.top, 28)
                         } else {
                             ForEach(Array(filteredApps.enumerated()), id: \.element.id) { index, app in
                                 AppRow(app: app, isSelected: index == navigationState.selectedIndex)
@@ -75,27 +76,25 @@ struct ContentView: View {
                             }
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 // Version badge
                 Text("v\(AppVersion.string)")
-                    .font(.system(size: 10, weight: .light))
+                    .font(.system(size: 9, weight: .light))
                     .foregroundStyle(.quaternary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .padding(.trailing, 12)
-                    .padding(.bottom, 8)
+                    .padding(.trailing, 10)
+                    .padding(.bottom, 6)
             }
         }
-        .frame(width: Layout.width, height: Layout.height)
+        .frame(width: LauncherLayout.width, height: LauncherLayout.height)
         .background(
-            RoundedRectangle(cornerRadius: Layout.cornerRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: LauncherLayout.cornerRadius, style: .continuous)
                 .fill(.thickMaterial)
         )
-        .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: LauncherLayout.cornerRadius, style: .continuous))
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 isSearchFocused = true
@@ -156,49 +155,48 @@ struct AppRow: View {
     let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(spacing: 4) {
-                if let icon = app.icon {
-                    Image(nsImage: icon)
-                        .resizable()
-                        .frame(width: 32, height: 32)
-                } else {
-                    Image(systemName: "app.dashed")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 32, height: 32)
+        HStack(spacing: 10) {
+            ZStack(alignment: .bottomTrailing) {
+                Group {
+                    if let icon = app.icon {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .frame(width: 24, height: 24)
+                    } else {
+                        Image(systemName: "app.dashed")
+                            .font(.system(size: 18))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 24, height: 24)
+                    }
                 }
-                
+
                 // Running indicator — white on selected row (accent bg), accent otherwise
                 if app.isRunning {
                     Circle()
                         .fill(isSelected ? Color.white : Color.accentColor)
                         .frame(width: 6, height: 6)
-                        .shadow(
-                            color: isSelected ? Color.black.opacity(0.25) : Color.clear,
-                            radius: 0.5,
-                            y: 0.5
+                        .overlay(
+                            Circle()
+                                .stroke(isSelected ? Color.accentColor.opacity(0.9) : Color.primary.opacity(0.15), lineWidth: 1)
                         )
-                } else {
-                    Circle()
-                        .fill(Color.clear)
-                        .frame(width: 6, height: 6)
+                        .offset(x: 2, y: 2)
                 }
             }
+            .frame(width: 26, height: 26)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(app.name)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(isSelected ? Color.white : Color.primary)
                 
                 // Show profile name if available, otherwise show path
                 if let profile = app.profile {
                     Text(profile)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(isSelected ? Color.white.opacity(0.8) : Color.accentColor)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Color.accentColor)
                 } else {
                     Text(app.path)
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
                         .foregroundStyle(isSelected ? Color.white.opacity(0.7) : Color.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -207,10 +205,10 @@ struct AppRow: View {
 
             Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: 5)
                 .fill(isSelected ? Color.accentColor : Color.primary.opacity(0.04))
         )
     }

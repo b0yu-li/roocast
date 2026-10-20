@@ -2,9 +2,6 @@ import SwiftUI
 import AppKit
 
 final class LauncherPanel: NSPanel {
-    private let panelWidth: CGFloat = 860
-    private let panelHeight: CGFloat = 560
-    
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onEnter: (() -> Void)?
@@ -14,7 +11,7 @@ final class LauncherPanel: NSPanel {
         self.navigationState = navigationState
         
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight),
+            contentRect: NSRect(x: 0, y: 0, width: LauncherLayout.width, height: LauncherLayout.height),
             styleMask: [.borderless],
             backing: .buffered,
             defer: true
@@ -32,8 +29,8 @@ final class LauncherPanel: NSPanel {
         // Center at top of main screen (Spotlight-style)
         if let screen = NSScreen.main {
             let screenFrame = screen.visibleFrame
-            let x = screenFrame.midX - panelWidth / 2
-            let y = screenFrame.maxY - panelHeight - 80
+            let x = screenFrame.midX - LauncherLayout.width / 2
+            let y = screenFrame.maxY - LauncherLayout.height - 80
             setFrameOrigin(NSPoint(x: x, y: y))
         }
 
@@ -59,7 +56,7 @@ final class LauncherPanel: NSPanel {
     }
 
     func show() {
-        setContentSize(NSSize(width: panelWidth, height: panelHeight))
+        setContentSize(NSSize(width: LauncherLayout.width, height: LauncherLayout.height))
         // Refresh running-app / Firefox-profile state each open.
         NotificationCenter.default.post(name: .launcherWillShow, object: nil)
         makeKeyAndOrderFront(nil)
