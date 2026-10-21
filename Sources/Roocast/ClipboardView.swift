@@ -49,31 +49,38 @@ struct ClipboardView: View {
             Divider()
 
             ZStack(alignment: .bottomTrailing) {
-                ScrollView {
-                    LazyVStack(spacing: 1) {
-                        if filteredItems.isEmpty {
-                            VStack(spacing: 6) {
-                                Image(systemName: emptyIconName)
-                                    .font(.system(size: 22, weight: .light))
-                                    .foregroundStyle(.tertiary)
-                                Text(emptyMessage)
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .padding(.top, 36)
-                        } else {
-                            ForEach(Array(filteredItems.enumerated()), id: \.element.id) { index, item in
-                                ClipboardRow(item: item, isSelected: index == navigationState.selectedIndex)
-                                    .onTapGesture {
-                                        navigationState.selectedIndex = index
-                                        pasteSelected()
-                                    }
+                // Keep the highlighted row in view while ↑/↓ moves past the fold.
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 1) {
+                            if filteredItems.isEmpty {
+                                VStack(spacing: 6) {
+                                    Image(systemName: emptyIconName)
+                                        .font(.system(size: 22, weight: .light))
+                                        .foregroundStyle(.tertiary)
+                                    Text(emptyMessage)
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .padding(.top, 36)
+                            } else {
+                                ForEach(Array(filteredItems.enumerated()), id: \.element.id) { index, item in
+                                    ClipboardRow(item: item, isSelected: index == navigationState.selectedIndex)
+                                        .id(index)
+                                        .onTapGesture {
+                                            navigationState.selectedIndex = index
+                                            pasteSelected()
+                                        }
+                                }
                             }
                         }
+                        .transaction { $0.animation = nil }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
                     }
-                    .transaction { $0.animation = nil }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
+                    .onChange(of: navigationState.selectedIndex) { _, index in
+                        proxy.scrollTo(index, anchor: .center)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
