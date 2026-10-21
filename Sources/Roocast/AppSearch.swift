@@ -85,6 +85,10 @@ enum AppSearch {
         let folderItems = folders ?? FolderShortcut.builtIns.map { AppItem.folder($0) }
 
         var output: [AppItem] = []
+        // Calculator leads when the raw query is a real expression (Tinycast-style).
+        if let calc = Calculator.evaluate(query) {
+            output.append(.calculator(calc))
+        }
         if matchesQuitCommand(lowered) {
             output.append(.quitRoocast)
         }
