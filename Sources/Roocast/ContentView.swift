@@ -112,7 +112,7 @@ struct ContentView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 isSearchFocused = true
             }
-            syncNavigation()
+            navigationState.sync(itemCount: filteredApps.count)
         }
         // onReceive keeps SwiftUI state live (addObserver captured a stale View copy).
         .onReceive(NotificationCenter.default.publisher(for: .launchSelectedApp)) { _ in
@@ -121,37 +121,26 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .launcherWillShow)) { _ in
             // Reset selection immediately; after reindex only refresh bounds so ↑/↓
             // during the scan is not yanked back to row 0.
-            syncNavigation()
+            navigationState.sync(itemCount: filteredApps.count)
             Task {
                 await appIndex.indexApps()
-                updateNavigationBounds()
+                navigationState.updateBounds(itemCount: filteredApps.count)
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 isSearchFocused = true
             }
         }
         .onChange(of: query) { _, _ in
-            syncNavigation()
+            navigationState.sync(itemCount: filteredApps.count)
         }
         // Empty-summon list appears when indexing finishes — query never changes, so
         // refresh arrow bounds whenever the index updates.
         .onChange(of: appIndex.apps) { _, _ in
-            updateNavigationBounds()
+            navigationState.updateBounds(itemCount: filteredApps.count)
         }
         .environmentObject(navigationState)
     }
 
-    private func syncNavigation() {
-        navigationState.reset()
-        updateNavigationBounds()
-    }
-
-    private func updateNavigationBounds() {
-        navigationState.maxIndex = max(0, filteredApps.count - 1)
-        if navigationState.selectedIndex > navigationState.maxIndex {
-            navigationState.selectedIndex = navigationState.maxIndex
-        }
-    }
 
     private func launchSelectedApp() {
         guard !filteredApps.isEmpty else { return }

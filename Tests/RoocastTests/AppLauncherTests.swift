@@ -77,10 +77,10 @@ final class AppLauncherTests: XCTestCase {
     }
 
     func testAppVersionString() {
-        XCTAssertEqual(AppVersion.string, "0.5.3")
+        XCTAssertEqual(AppVersion.string, "0.5.4")
         XCTAssertEqual(AppVersion.major, 0)
         XCTAssertEqual(AppVersion.minor, 5)
-        XCTAssertEqual(AppVersion.patch, 3)
+        XCTAssertEqual(AppVersion.patch, 4)
     }
 
     /// Reindex must reuse the same id or the switcher ForEach rebuilds every row (visible jump).
@@ -103,5 +103,17 @@ final class AppLauncherTests: XCTestCase {
             path: "/Applications/Firefox.app"
         )
         XCTAssertNotEqual(work.id, personal.id)
+    }
+
+    func testAppItemSearchTextIncludesProfileAndAliases() {
+        let profiled = AppItem.stub(
+            name: "Firefox",
+            profile: "work",
+            path: "/Applications/Firefox.app"
+        )
+        XCTAssertEqual(profiled.searchText, "Firefox work")
+
+        let folder = AppItem.folderStub(name: "Downloads", aliases: ["dl", "download"])
+        XCTAssertEqual(folder.searchText, "Downloads dl download")
     }
 }

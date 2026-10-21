@@ -133,16 +133,8 @@ final class AppSearchTests: XCTestCase {
         XCTAssertTrue(firefox.allSatisfy { $0.name == "Firefox" })
     }
 
+    /// Equal intention scores break alphabetically (Xab before Yab).
     func testRankNameTieBreaksAlphabetically() {
-        let apps = [
-            AppItem.stub(name: "Notes"),
-            AppItem.stub(name: "Notion"),
-        ]
-        // Both are exact-ish prefix for "no" with same length? Notes=5, Notion=6 → Notes wins by score.
-        // Use equal-length names with same score via exact match on searchText — use identical scores
-        // by matching mid-string at same position... simpler: query that matches both as prefixes
-        // with same name length is hard. Instead verify stable sort for equal intention via
-        // substring at different apps with forced equal path — "ab" against "Xab" and "Yab":
         let tied = [
             AppItem.stub(name: "Yab"),
             AppItem.stub(name: "Xab"),
