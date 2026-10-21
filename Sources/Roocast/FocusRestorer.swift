@@ -67,7 +67,7 @@ enum FocusRestorer {
         }
         didPromptForTrust = true
 
-        log("Accessibility not trusted — prompting once (required for clipboard ⌘V / window snap)")
+        log("Accessibility not trusted — prompting once (required for clipboard ⌘V / window snap / text expander)")
         let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         let trusted = AXIsProcessTrustedWithOptions(opts)
         if trusted {
