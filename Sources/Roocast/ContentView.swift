@@ -14,6 +14,8 @@ struct ContentView: View {
     @StateObject private var appIndex = AppIndex()
     @FocusState private var isSearchFocused: Bool
     let onDismiss: () -> Void
+    /// Snap the prior focused window (left/right half). Panel supplies AX target.
+    var onWindowSnap: ((WindowSnap.Side) -> Void)? = nil
 
     var filteredApps: [AppItem] {
         appIndex.search(query)
@@ -151,6 +153,18 @@ struct ContentView: View {
         if app.kind == .quit {
             query = ""
             NSApplication.shared.terminate(nil)
+            return
+        }
+
+        if app.kind == .leftHalf {
+            query = ""
+            onWindowSnap?(.left)
+            return
+        }
+
+        if app.kind == .rightHalf {
+            query = ""
+            onWindowSnap?(.right)
             return
         }
 

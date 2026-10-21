@@ -67,7 +67,7 @@ enum FocusRestorer {
         }
         didPromptForTrust = true
 
-        log("Accessibility not trusted — prompting once (required for clipboard ⌘V)")
+        log("Accessibility not trusted — prompting once (required for clipboard ⌘V / window snap)")
         let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         let trusted = AXIsProcessTrustedWithOptions(opts)
         if trusted {
@@ -78,6 +78,23 @@ enum FocusRestorer {
             )
         }
         return trusted
+    }
+
+    /// Opens System Settings → Privacy → Accessibility (Tinycast `Permissions.openAccessibilitySettings`).
+    @MainActor
+    static func openAccessibilitySettings() {
+        let candidates = [
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility",
+        ]
+        for string in candidates {
+            guard let url = URL(string: string) else { continue }
+            if NSWorkspace.shared.open(url) {
+                log("opened Accessibility settings")
+                return
+            }
+        }
+        log("failed to open Accessibility settings")
     }
 
     static func capture(pid: pid_t) -> Snapshot {

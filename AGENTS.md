@@ -41,7 +41,7 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 
 ### 3. Less Is More
 
-- **Focused scope.** A launcher launches things — and keeps a light clipboard history. It does not manage your calendar, your CRM, or your soul.
+- **Focused scope.** A launcher launches things, keeps a light clipboard history, and offers a few built-in window snaps. It does not manage your calendar, your CRM, or your soul.
 - **No plugin marketplace.** Extensions are built-in or not supported. Complexity is the enemy of performance.
 - **No network calls for core functionality.** Everything the launcher needs lives on-device. Extensions that need the network are opt-in and async.
 - **No telemetry.** We don't track you. We don't phone home. Your keystrokes and clipboard are yours.
@@ -124,15 +124,16 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 
 - **Launcher** — ⌘Space summons app/folder search (global hotkey).
 - **Clipboard history** — ⌘Esc summons recent pasteboard items (global hotkey, same process).
+- **Window snap (minimal)** — built-in commands for left half / right half of the display the focused window is on (Accessibility). Grow only with deliberate, small additions.
 
 ## What Roocast Is NOT
 
-- Not a window manager (use Rectangle or Magnet)
+- Not a full window manager (no tiling layouts, grids, or multi-monitor choreography — use Rectangle or Magnet for that)
 - Not a snippet expander (use TextExpander or Espanso)
 - Not a workflow automator (use Shortcuts or Keyboard Maestro)
 - Not a replacement for Spotlight's file search (use HoudahSpot or find)
 
-Roocast is a **launcher with clipboard history**. It launches apps, finds files, runs commands, and recalls what you copied. That's it.
+Roocast is a **launcher with clipboard history and light window snap**. It launches apps, finds files, runs commands, recalls what you copied, and can pin a window to a half. That's it.
 
 ---
 

@@ -5,6 +5,8 @@ struct AppItem: Identifiable, Hashable {
         case app
         case quit
         case folder
+        case leftHalf
+        case rightHalf
     }
 
     let id: UUID
@@ -96,6 +98,44 @@ struct AppItem: Identifiable, Hashable {
             profile: nil,
             aliases: [],
             kind: .quit
+        )
+    }()
+
+    /// Built-in command: snap the prior focused window to the left half of its display.
+    static let leftHalf: AppItem = {
+        let icon = NSImage(
+            systemSymbolName: "rectangle.lefthalf.filled",
+            accessibilityDescription: "Left Half"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: UUID(uuidString: "B2C3D4E5-F6A7-8901-BCDE-F12345678901")!,
+            name: "Left Half",
+            path: "Command",
+            icon: icon,
+            isRunning: false,
+            profile: nil,
+            aliases: ["lh", "left"],
+            kind: .leftHalf
+        )
+    }()
+
+    /// Built-in command: snap the prior focused window to the right half of its display.
+    static let rightHalf: AppItem = {
+        let icon = NSImage(
+            systemSymbolName: "rectangle.righthalf.filled",
+            accessibilityDescription: "Right Half"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: UUID(uuidString: "C3D4E5F6-A7B8-9012-CDEF-123456789012")!,
+            name: "Right Half",
+            path: "Command",
+            icon: icon,
+            isRunning: false,
+            profile: nil,
+            aliases: ["rh", "right"],
+            kind: .rightHalf
         )
     }()
 

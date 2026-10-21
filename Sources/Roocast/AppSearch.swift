@@ -1,6 +1,6 @@
 import Foundation
 
-/// Pure search ranking: quit command + intention-scored apps and folders.
+/// Pure search ranking: built-in commands + intention-scored apps and folders.
 ///
 /// Kept free of `AppIndex` / disk I/O so ranking stays unit-testable.
 enum AppSearch {
@@ -11,9 +11,39 @@ enum AppSearch {
         return "quit".hasPrefix(lowered) || "quit roocast".hasPrefix(lowered)
     }
 
-    /// Quit (if matched) first, then apps + folders ranked together by `IntentionScore`.
+    /// Matches as the user types toward "left" / "left half" / alias "lh".
+    nonisolated static func matchesLeftHalfCommand(_ query: String) -> Bool {
+        matchesWindowSnapCommand(
+            query,
+            phrases: ["left", "left half"],
+            aliases: ["lh"]
+        )
+    }
+
+    /// Matches as the user types toward "right" / "right half" / alias "rh".
+    nonisolated static func matchesRightHalfCommand(_ query: String) -> Bool {
+        matchesWindowSnapCommand(
+            query,
+            phrases: ["right", "right half"],
+            aliases: ["rh"]
+        )
+    }
+
+    /// Prefix match on display phrases, or exact alias (e.g. `lh`).
+    nonisolated private static func matchesWindowSnapCommand(
+        _ query: String,
+        phrases: [String],
+        aliases: [String]
+    ) -> Bool {
+        let lowered = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !lowered.isEmpty else { return false }
+        if aliases.contains(lowered) { return true }
+        return phrases.contains { $0.hasPrefix(lowered) }
+    }
+
+    /// Built-in commands first (if matched), then apps + folders by `IntentionScore`.
     ///
-    /// Empty / whitespace query returns running-app switch suggestions (no folders/quit).
+    /// Empty / whitespace query returns running-app switch suggestions (no folders/commands).
     ///
     /// - Parameter folders: Folder shortcut rows. Defaults to built-in shortcuts.
     ///   Pass stubs in unit tests to avoid disk icon lookup.
@@ -38,6 +68,12 @@ enum AppSearch {
         var output: [AppItem] = []
         if matchesQuitCommand(lowered) {
             output.append(.quitRoocast)
+        }
+        if matchesLeftHalfCommand(lowered) {
+            output.append(.leftHalf)
+        }
+        if matchesRightHalfCommand(lowered) {
+            output.append(.rightHalf)
         }
         output.append(contentsOf: rank(query: lowered, apps: apps + folderItems))
         return output
