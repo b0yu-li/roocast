@@ -19,8 +19,8 @@ final class LauncherPanel: FloatingPanel {
                     // Launch path: target app activates itself.
                     self?.hide(restoreFocus: false)
                 },
-                onWindowSnap: { [weak self] side in
-                    self?.performWindowSnap(side)
+                onWindowSnap: { [weak self] command in
+                    self?.performWindowSnap(command)
                 }
             )
         )
@@ -31,10 +31,10 @@ final class LauncherPanel: FloatingPanel {
     }
 
     /// Tinycast hand-off: remember the prior app, hide (restore focus if we stole it),
-    /// then resolve + snap that app's focused window via Accessibility.
-    private func performWindowSnap(_ side: WindowSnap.Side) {
+    /// then resolve + place that app's focused window via Accessibility.
+    private func performWindowSnap(_ command: WindowSnap.Command) {
         let app = previouslyActiveApp
         hide(restoreFocus: true)
-        WindowSnap.apply(side: side, activating: app)
+        WindowSnap.apply(command: command, activating: app)
     }
 }

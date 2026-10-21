@@ -7,6 +7,7 @@ struct AppItem: Identifiable, Hashable {
         case folder
         case leftHalf
         case rightHalf
+        case maximize
     }
 
     let id: UUID
@@ -136,6 +137,25 @@ struct AppItem: Identifiable, Hashable {
             profile: nil,
             aliases: ["rh", "right"],
             kind: .rightHalf
+        )
+    }()
+
+    /// Built-in command: fill the display's visible frame (current Space — not macOS fullscreen).
+    static let maximize: AppItem = {
+        let icon = NSImage(
+            systemSymbolName: "arrow.up.left.and.arrow.down.right",
+            accessibilityDescription: "Maximize"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: UUID(uuidString: "D4E5F6A7-B8C9-0123-DEF0-234567890123")!,
+            name: "Maximize",
+            path: "Command",
+            icon: icon,
+            isRunning: false,
+            profile: nil,
+            aliases: ["max"],
+            kind: .maximize
         )
     }()
 
