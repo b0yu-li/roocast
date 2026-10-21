@@ -66,7 +66,7 @@ struct ClipboardView: View {
                             } else {
                                 ForEach(Array(filteredItems.enumerated()), id: \.element.id) { index, item in
                                     ClipboardRow(item: item, isSelected: index == navigationState.selectedIndex)
-                                        .id(index)
+                                        .id(item.id)
                                         .onTapGesture {
                                             navigationState.selectedIndex = index
                                             pasteSelected()
@@ -79,7 +79,9 @@ struct ClipboardView: View {
                         .padding(.vertical, 6)
                     }
                     .onChange(of: navigationState.selectedIndex) { _, index in
-                        proxy.scrollTo(index, anchor: .center)
+                        // Minimum scroll to reveal — `.center` hid early rows on short lists.
+                        guard filteredItems.indices.contains(index) else { return }
+                        proxy.scrollTo(filteredItems[index].id)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

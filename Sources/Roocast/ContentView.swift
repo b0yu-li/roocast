@@ -64,8 +64,10 @@ struct ContentView: View {
                                 .padding(.top, 36)
                             } else {
                                 ForEach(Array(filteredApps.enumerated()), id: \.element.id) { index, app in
+                                    // Identity must be the app id — `.id(index)` reused empty-summon
+                                    // Firefox rows when the query changed (Notes looked "missing").
                                     AppRow(app: app, isSelected: index == navigationState.selectedIndex)
-                                        .id(index)
+                                        .id(app.id)
                                         .onTapGesture {
                                             navigationState.selectedIndex = index
                                             launchSelectedApp()
@@ -79,7 +81,9 @@ struct ContentView: View {
                         .padding(.vertical, 6)
                     }
                     .onChange(of: navigationState.selectedIndex) { _, index in
-                        proxy.scrollTo(index, anchor: .center)
+                        // No `.center` — that over-scrolled short lists so row 3 lost its highlight.
+                        guard filteredApps.indices.contains(index) else { return }
+                        proxy.scrollTo(filteredApps[index].id)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
