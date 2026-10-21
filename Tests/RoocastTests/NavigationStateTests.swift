@@ -43,4 +43,28 @@ final class NavigationStateTests: XCTestCase {
         nav.moveDown()
         XCTAssertEqual(nav.selectedIndex, 0)
     }
+
+    func testUpdateBoundsClampsSelectedIndex() {
+        let nav = NavigationState()
+        nav.selectedIndex = 5
+        nav.updateBounds(itemCount: 3)
+        XCTAssertEqual(nav.maxIndex, 2)
+        XCTAssertEqual(nav.selectedIndex, 2)
+    }
+
+    func testUpdateBoundsEmptyList() {
+        let nav = NavigationState()
+        nav.selectedIndex = 2
+        nav.updateBounds(itemCount: 0)
+        XCTAssertEqual(nav.maxIndex, 0)
+        XCTAssertEqual(nav.selectedIndex, 0)
+    }
+
+    func testSyncResetsAndAppliesBounds() {
+        let nav = NavigationState()
+        nav.selectedIndex = 4
+        nav.sync(itemCount: 10)
+        XCTAssertEqual(nav.selectedIndex, 0)
+        XCTAssertEqual(nav.maxIndex, 9)
+    }
 }

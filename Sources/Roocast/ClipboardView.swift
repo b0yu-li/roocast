@@ -104,7 +104,7 @@ struct ClipboardView: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: ClipboardLayout.cornerRadius, style: .continuous))
         .onAppear {
-            syncNavigation()
+            navigationState.sync(itemCount: filteredItems.count)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 isSearchFocused = true
             }
@@ -116,16 +116,16 @@ struct ClipboardView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .clipboardWillShow)) { _ in
             query = ""
-            syncNavigation()
+            navigationState.sync(itemCount: filteredItems.count)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 isSearchFocused = true
             }
         }
         .onChange(of: query) { _, _ in
-            syncNavigation()
+            navigationState.sync(itemCount: filteredItems.count)
         }
         .onChange(of: store.items) { _, _ in
-            updateNavigationBounds()
+            navigationState.updateBounds(itemCount: filteredItems.count)
         }
     }
 
@@ -139,17 +139,6 @@ struct ClipboardView: View {
         return "No results"
     }
 
-    private func syncNavigation() {
-        navigationState.reset()
-        updateNavigationBounds()
-    }
-
-    private func updateNavigationBounds() {
-        navigationState.maxIndex = max(0, filteredItems.count - 1)
-        if navigationState.selectedIndex > navigationState.maxIndex {
-            navigationState.selectedIndex = navigationState.maxIndex
-        }
-    }
 
     private func pasteSelected() {
         guard !filteredItems.isEmpty else {
