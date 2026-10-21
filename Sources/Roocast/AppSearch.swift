@@ -29,6 +29,16 @@ enum AppSearch {
         )
     }
 
+    /// Matches as the user types toward "max" / "maximize".
+    /// Fills the current Space — not macOS fullscreen (another Space).
+    nonisolated static func matchesMaximizeCommand(_ query: String) -> Bool {
+        matchesWindowSnapCommand(
+            query,
+            phrases: ["max", "maximize"],
+            aliases: ["max"]
+        )
+    }
+
     /// Prefix match on display phrases, or exact alias (e.g. `lh`).
     nonisolated private static func matchesWindowSnapCommand(
         _ query: String,
@@ -74,6 +84,9 @@ enum AppSearch {
         }
         if matchesRightHalfCommand(lowered) {
             output.append(.rightHalf)
+        }
+        if matchesMaximizeCommand(lowered) {
+            output.append(.maximize)
         }
         output.append(contentsOf: rank(query: lowered, apps: apps + folderItems))
         return output

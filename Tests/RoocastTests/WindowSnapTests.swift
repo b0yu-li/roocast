@@ -47,10 +47,25 @@ final class WindowSnapTests: XCTestCase {
         XCTAssertEqual(left.height, axVisible.height)
     }
 
+    func testTargetFrameMaximizeFillsVisible() {
+        let visible = CGRect(x: 0, y: 40, width: 1440, height: 860)
+        XCTAssertEqual(
+            WindowSnap.targetFrame(of: visible, command: .maximize),
+            visible
+        )
+        XCTAssertEqual(
+            WindowSnap.targetFrame(of: visible, command: .left),
+            WindowSnap.halfFrame(of: visible, side: .left)
+        )
+    }
+
     func testWindowSnapCommandItems() {
         XCTAssertEqual(AppItem.leftHalf.kind, .leftHalf)
         XCTAssertEqual(AppItem.leftHalf.name, "Left Half")
         XCTAssertEqual(AppItem.rightHalf.kind, .rightHalf)
         XCTAssertEqual(AppItem.rightHalf.name, "Right Half")
+        XCTAssertEqual(AppItem.maximize.kind, .maximize)
+        XCTAssertEqual(AppItem.maximize.name, "Maximize")
+        XCTAssertTrue(AppItem.maximize.aliases.contains("max"))
     }
 }

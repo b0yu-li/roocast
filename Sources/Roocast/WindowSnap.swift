@@ -1,20 +1,26 @@
 import AppKit
 import ApplicationServices
 
-/// Built-in window snap: left / right half of the display the target window is on.
+/// Built-in window snap: left / right half, or maximize within the current Space.
+///
+/// Maximize fills `NSScreen.visibleFrame` (menu bar / Dock stay) — never toggles
+/// macOS `AXFullScreen` (which would create a new Space).
 ///
 /// Mirrors Tinycast's AX path (`AXGeometry` + `AXWindowAccess.write`):
 /// work in Accessibility top-left coordinates, resolve the target window on the
 /// remembered app, then apply size → position → size.
 enum WindowSnap {
-    enum Side: Hashable {
+    enum Command: Hashable {
         case left
         case right
+        /// Fill the display's visible frame (current Space). Not macOS fullscreen.
+        case maximize
     }
 
     /// Split a visible frame into a left or right half (same math in AppKit or AX space).
     /// Odd pixel goes to the right half so the two halves cover the frame exactly.
-    nonisolated static func halfFrame(of visibleFrame: CGRect, side: Side) -> CGRect {
+    /// Prefer `targetFrame` when the command may be `.maximize`.
+    nonisolated static func halfFrame(of visibleFrame: CGRect, side: Command) -> CGRect {
         let leftWidth = floor(visibleFrame.width / 2)
         switch side {
         case .left:
@@ -31,6 +37,18 @@ enum WindowSnap {
                 width: visibleFrame.width - leftWidth,
                 height: visibleFrame.height
             )
+        case .maximize:
+            return visibleFrame
+        }
+    }
+
+    /// Target frame in the same coordinate space as `visibleFrame`.
+    nonisolated static func targetFrame(of visibleFrame: CGRect, command: Command) -> CGRect {
+        switch command {
+        case .left, .right:
+            return halfFrame(of: visibleFrame, side: command)
+        case .maximize:
+            return visibleFrame
         }
     }
 
@@ -45,12 +63,12 @@ enum WindowSnap {
         )
     }
 
-    /// Resize/move the focused window of `app` to the left or right half.
+    /// Resize/move the focused window of `app` per `command`.
     /// Requires Accessibility trust (prompts + opens System Settings when denied).
     @MainActor
-    static func apply(side: Side, activating app: NSRunningApplication?) {
+    static func apply(command: Command, activating app: NSRunningApplication?) {
         guard FocusRestorer.ensureTrusted(prompt: true) else {
-            FocusRestorer.log("windowSnap: Accessibility not trusted — abort \(side)")
+            FocusRestorer.log("windowSnap: Accessibility not trusted — abort \(command)")
             FocusRestorer.openAccessibilitySettings()
             return
         }
@@ -72,6 +90,13 @@ enum WindowSnap {
         }
         AXUIElementSetMessagingTimeout(window, 1)
 
+        // Native fullscreen owns a Space — exit it before geometry writes (Tinycast leaves
+        // fullscreen alone; we exit so Maximize can fill the desktop Space instead).
+        if isNativeFullScreen(window) {
+            FocusRestorer.log("windowSnap: exiting native fullscreen before \(command)")
+            _ = setNativeFullScreen(window, false)
+        }
+
         let primaryHeight = NSScreen.screens.first(where: { $0.frame.origin == .zero })?.frame.height
             ?? NSScreen.main?.frame.height
             ?? 0
@@ -88,9 +113,9 @@ enum WindowSnap {
             return
         }
 
-        // Tinycast: convert visibleFrame into AX space, then tile there.
+        // Tinycast: convert visibleFrame into AX space, then place there.
         let axVisible = flip(screen.visibleFrame, primaryScreenHeight: primaryHeight)
-        let target = halfFrame(of: axVisible, side: side)
+        let target = targetFrame(of: axVisible, command: command)
 
         var settable = DarwinBoolean(false)
         let canResize =
@@ -102,13 +127,13 @@ enum WindowSnap {
 
         guard write(target, to: window, canResize: canResize) else {
             FocusRestorer.log(
-                "windowSnap: write failed \(side) app=\(app.localizedName ?? "?") target=\(target)"
+                "windowSnap: write failed \(command) app=\(app.localizedName ?? "?") target=\(target)"
             )
             return
         }
 
         FocusRestorer.log(
-            "windowSnap: \(side) app=\(app.localizedName ?? "?") target=\(target) canResize=\(canResize)"
+            "windowSnap: \(command) app=\(app.localizedName ?? "?") target=\(target) canResize=\(canResize)"
         )
 
         // Tinycast `AXWindowAccess.focus`: raise + frontmost + activate.
@@ -242,5 +267,24 @@ enum WindowSnap {
         let appKit = flip(axFrame, primaryScreenHeight: primaryScreenHeight)
         let center = CGPoint(x: appKit.midX, y: appKit.midY)
         return NSScreen.screens.first { $0.frame.contains(center) } ?? NSScreen.main
+    }
+
+    // MARK: - Native fullscreen (Space-taking) — never used as Maximize
+
+    private static let fullScreenAttribute = "AXFullScreen" as CFString
+
+    @MainActor
+    private static func isNativeFullScreen(_ window: AXUIElement) -> Bool {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(window, fullScreenAttribute, &value) == .success
+        else { return false }
+        return (value as? Bool) == true
+    }
+
+    @MainActor
+    @discardableResult
+    private static func setNativeFullScreen(_ window: AXUIElement, _ enabled: Bool) -> Bool {
+        let target: CFBoolean = enabled ? kCFBooleanTrue : kCFBooleanFalse
+        return AXUIElementSetAttributeValue(window, fullScreenAttribute, target) == .success
     }
 }

@@ -34,6 +34,16 @@ final class AppSearchTests: XCTestCase {
         XCTAssertFalse(AppSearch.matchesRightHalfCommand("rightly"))
     }
 
+    func testMatchesMaximizeCommand() {
+        XCTAssertTrue(AppSearch.matchesMaximizeCommand("m"))
+        XCTAssertTrue(AppSearch.matchesMaximizeCommand("ma"))
+        XCTAssertTrue(AppSearch.matchesMaximizeCommand("max"))
+        XCTAssertTrue(AppSearch.matchesMaximizeCommand("maximize"))
+        XCTAssertFalse(AppSearch.matchesMaximizeCommand(""))
+        XCTAssertFalse(AppSearch.matchesMaximizeCommand("maximum"))
+        XCTAssertFalse(AppSearch.matchesMaximizeCommand("fullscreen"))
+    }
+
     func testResultsPutsQuitFirst() {
         let apps = [
             AppItem.stub(name: "Notes"),
@@ -59,6 +69,12 @@ final class AppSearchTests: XCTestCase {
     func testResultsAliasLhAndRh() {
         XCTAssertEqual(AppSearch.results(query: "lh", apps: []).first?.kind, .leftHalf)
         XCTAssertEqual(AppSearch.results(query: "rh", apps: []).first?.kind, .rightHalf)
+    }
+
+    func testResultsPutsMaximizeFirst() {
+        let apps = [AppItem.stub(name: "Mail")]
+        let results = AppSearch.results(query: "max", apps: apps)
+        XCTAssertEqual(results.first?.kind, .maximize)
     }
 
     func testResultsEmptyQueryShowsRunningSwitchSuggestions() {
