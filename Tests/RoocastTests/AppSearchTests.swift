@@ -74,6 +74,29 @@ final class AppSearchTests: XCTestCase {
         XCTAssertEqual(ranked.map(\.name), ["Notes", "Keynote"])
     }
 
+    /// Typing `note` must surface Notes — running Firefox profiles must not match.
+    func testRankNoteFindsNotesNotFirefoxProfiles() {
+        let apps = [
+            AppItem.stub(
+                name: "Firefox",
+                profile: "default-release",
+                path: "/Applications/Firefox.app",
+                isRunning: true
+            ),
+            AppItem.stub(
+                name: "Firefox",
+                profile: "Profile 1",
+                path: "/Applications/Firefox.app",
+                isRunning: true
+            ),
+            AppItem.stub(name: "Notes", path: "/System/Applications/Notes.app"),
+            AppItem.stub(name: "Keynote", path: "/Applications/Keynote.app"),
+        ]
+        let ranked = AppSearch.rank(query: "note", apps: apps)
+        XCTAssertEqual(ranked.map(\.name), ["Notes", "Keynote"])
+        XCTAssertEqual(ranked.first?.name, "Notes")
+    }
+
     func testRankPrefersRunningFirefoxOverFindMyForFi() {
         let apps = [
             AppItem.stub(name: "FindMy", path: "/System/Applications/FindMy.app"),
