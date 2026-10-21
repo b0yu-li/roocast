@@ -48,32 +48,39 @@ struct ContentView: View {
 
             // Results area
             ZStack(alignment: .bottomTrailing) {
-                ScrollView {
-                    LazyVStack(spacing: 1) {
-                        if filteredApps.isEmpty {
-                            VStack(spacing: 6) {
-                                Image(systemName: query.isEmpty ? "keyboard" : "magnifyingglass")
-                                    .font(.system(size: 22, weight: .light))
-                                    .foregroundStyle(.tertiary)
-                                Text(query.isEmpty ? "Start typing to search…" : "No results")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .padding(.top, 36)
-                        } else {
-                            ForEach(Array(filteredApps.enumerated()), id: \.element.id) { index, app in
-                                AppRow(app: app, isSelected: index == navigationState.selectedIndex)
-                                    .onTapGesture {
-                                        navigationState.selectedIndex = index
-                                        launchSelectedApp()
-                                    }
+                // Keep the highlighted row in view while ↑/↓ moves past the fold.
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 1) {
+                            if filteredApps.isEmpty {
+                                VStack(spacing: 6) {
+                                    Image(systemName: query.isEmpty ? "keyboard" : "magnifyingglass")
+                                        .font(.system(size: 22, weight: .light))
+                                        .foregroundStyle(.tertiary)
+                                    Text(query.isEmpty ? "Start typing to search…" : "No results")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .padding(.top, 36)
+                            } else {
+                                ForEach(Array(filteredApps.enumerated()), id: \.element.id) { index, app in
+                                    AppRow(app: app, isSelected: index == navigationState.selectedIndex)
+                                        .id(index)
+                                        .onTapGesture {
+                                            navigationState.selectedIndex = index
+                                            launchSelectedApp()
+                                        }
+                                }
                             }
                         }
+                        // Reindex must not animate rows into a new order (reads as a sudden jump).
+                        .transaction { $0.animation = nil }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
                     }
-                    // Reindex must not animate rows into a new order (reads as a sudden jump).
-                    .transaction { $0.animation = nil }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
+                    .onChange(of: navigationState.selectedIndex) { _, index in
+                        proxy.scrollTo(index, anchor: .center)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
