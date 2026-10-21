@@ -150,6 +150,14 @@ struct ContentView: View {
         
         let app = filteredApps[navigationState.selectedIndex]
 
+        if case .calculator(let copyText) = app.kind {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(copyText, forType: .string)
+            query = ""
+            onDismiss()
+            return
+        }
+
         if app.kind == .quit {
             query = ""
             NSApplication.shared.terminate(nil)
@@ -241,15 +249,30 @@ struct AppRow: View {
             .frame(width: 26, height: 26)
 
             // Name only — no filesystem paths. Profile stays as a quiet label when needed.
-            HStack(spacing: 6) {
-                Text(app.name)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(isSelected ? Color.white : Color.primary)
+            // Calculator: answer first, expression as the quiet echo (Tinycast lead-row shape).
+            if case .calculator = app.kind {
+                HStack(spacing: 6) {
+                    Text(app.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isSelected ? Color.white : Color.primary)
+                    if let expression = app.profile {
+                        Text(expression)
+                            .font(.system(size: 12))
+                            .foregroundStyle(isSelected ? Color.white.opacity(0.8) : .secondary)
+                            .lineLimit(1)
+                    }
+                }
+            } else {
+                HStack(spacing: 6) {
+                    Text(app.name)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(isSelected ? Color.white : Color.primary)
 
-                if let profile = app.profile {
-                    Text(profile)
-                        .font(.system(size: 12))
-                        .foregroundStyle(isSelected ? Color.white.opacity(0.8) : .secondary)
+                    if let profile = app.profile {
+                        Text(profile)
+                            .font(.system(size: 12))
+                            .foregroundStyle(isSelected ? Color.white.opacity(0.8) : .secondary)
+                    }
                 }
             }
 

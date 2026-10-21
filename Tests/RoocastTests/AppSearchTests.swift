@@ -66,6 +66,24 @@ final class AppSearchTests: XCTestCase {
         XCTAssertTrue(results.contains { $0.name == "Quitter" })
     }
 
+    func testResultsPutsCalculatorFirst() {
+        let results = AppSearch.results(query: "2+2", apps: [AppItem.stub(name: "Notes")], folders: [])
+        guard case .calculator(let copyText) = results.first?.kind else {
+            return XCTFail("expected calculator lead row")
+        }
+        XCTAssertEqual(copyText, "4")
+        XCTAssertEqual(results.first?.name, "4")
+        XCTAssertEqual(results.first?.profile, "2+2")
+    }
+
+    func testResultsNoCalculatorForPlainText() {
+        let results = AppSearch.results(query: "notes", apps: [AppItem.stub(name: "Notes")], folders: [])
+        XCTAssertFalse(results.contains {
+            if case .calculator = $0.kind { return true }
+            return false
+        })
+    }
+
     func testResultsPutsLeftHalfFirst() {
         let apps = [AppItem.stub(name: "Letters")]
         let results = AppSearch.results(query: "left", apps: apps)

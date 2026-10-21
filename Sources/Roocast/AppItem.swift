@@ -9,6 +9,8 @@ struct AppItem: Identifiable, Hashable {
         case rightHalf
         case maximize
         case reasonableSize
+        /// Lead calculator row — Enter copies `copyText`.
+        case calculator(copyText: String)
     }
 
     let id: UUID
@@ -178,6 +180,25 @@ struct AppItem: Identifiable, Hashable {
             kind: .reasonableSize
         )
     }()
+
+    /// Lead calculator row — `name` is the answer, `profile` echoes the expression.
+    static func calculator(_ result: Calculator.Result) -> AppItem {
+        let icon = NSImage(
+            systemSymbolName: "plus.forwardslash.minus",
+            accessibilityDescription: "Calculator"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: nameBasedUUID("roocast.calc:\(result.expression)=\(result.copyText)"),
+            name: result.display,
+            path: "Calculator",
+            icon: icon,
+            isRunning: false,
+            profile: result.expression,
+            aliases: [],
+            kind: .calculator(copyText: result.copyText)
+        )
+    }
 
     /// Folder shortcut row — opens `shortcut.path` in Finder on activate.
     static func folder(_ shortcut: FolderShortcut) -> AppItem {
