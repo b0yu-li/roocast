@@ -2,45 +2,46 @@ import XCTest
 @testable import Roocast
 
 final class TextExpanderTests: XCTestCase {
-    func testFormattedDateUsesSortableLocalPattern() {
+    func testFormattedTimeUsesLocalDateTimePattern() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)! // UTC+8
         var components = DateComponents()
         components.year = 2026
         components.month = 10
         components.day = 21
-        components.hour = 11
-        components.minute = 57
+        components.hour = 13
+        components.minute = 50
         let date = calendar.date(from: components)!
 
         XCTAssertEqual(
-            TextExpanderSnippets.formattedDate(date, calendar: calendar),
-            "2026-10-21-11-57"
+            TextExpanderSnippets.formattedTime(date, calendar: calendar),
+            "2026-10-21 13:50"
         )
     }
 
-    func testExpansionForDateKeyword() {
-        XCTAssertNotNil(TextExpanderSnippets.expansion(forKeyword: "$date"))
-        XCTAssertNotNil(TextExpanderSnippets.expansion(forKeyword: "$DATE"))
-        XCTAssertNil(TextExpanderSnippets.expansion(forKeyword: "$time"))
+    func testExpansionForTimeKeyword() {
+        XCTAssertNotNil(TextExpanderSnippets.expansion(forKeyword: "$time"))
+        XCTAssertNotNil(TextExpanderSnippets.expansion(forKeyword: "$TIME"))
+        XCTAssertNil(TextExpanderSnippets.expansion(forKeyword: "$date"))
     }
 
-    func testPolicyMatchesDateSuffix() {
+    func testPolicyMatchesTimeSuffix() {
         var policy = TextExpanderPolicy(now: { Date(timeIntervalSince1970: 1_761_000_000) })
         XCTAssertNil(policy.process(.text("$")))
-        XCTAssertNil(policy.process(.text("d")))
-        XCTAssertNil(policy.process(.text("a")))
         XCTAssertNil(policy.process(.text("t")))
+        XCTAssertNil(policy.process(.text("i")))
+        XCTAssertNil(policy.process(.text("m")))
         let match = policy.process(.text("e"))
-        XCTAssertEqual(match?.keyword, "$date")
+        XCTAssertEqual(match?.keyword, "$time")
         XCTAssertEqual(match?.deletionCount, 5)
-        XCTAssertEqual(match?.expansion.count, "2026-10-21-11-57".count)
-        XCTAssertTrue(match?.expansion.split(separator: "-").count == 5)
+        XCTAssertEqual(match?.expansion.count, "2026-10-21 13:50".count)
+        XCTAssertTrue(match?.expansion.contains(" ") == true)
+        XCTAssertTrue(match?.expansion.contains(":") == true)
     }
 
     func testPolicyIsCaseInsensitive() {
         var policy = TextExpanderPolicy()
-        for ch in ["$", "D", "A", "T"] {
+        for ch in ["$", "T", "I", "M"] {
             XCTAssertNil(policy.process(.text(ch)))
         }
         XCTAssertNotNil(policy.process(.text("E")))
@@ -49,11 +50,11 @@ final class TextExpanderTests: XCTestCase {
     func testPolicyDeleteBackwardAndReset() {
         var policy = TextExpanderPolicy()
         _ = policy.process(.text("$"))
-        _ = policy.process(.text("d"))
-        _ = policy.process(.deleteBackward)
-        _ = policy.process(.text("d"))
-        _ = policy.process(.text("a"))
         _ = policy.process(.text("t"))
+        _ = policy.process(.deleteBackward)
+        _ = policy.process(.text("t"))
+        _ = policy.process(.text("i"))
+        _ = policy.process(.text("m"))
         XCTAssertNil(policy.process(.reset))
         XCTAssertNil(policy.process(.text("e"))) // buffer was cleared
     }

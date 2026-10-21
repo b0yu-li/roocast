@@ -125,16 +125,16 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 - **Launcher** — ⌘Space summons app/folder search (global hotkey).
 - **Clipboard history** — ⌘Esc summons recent pasteboard items (global hotkey, same process).
 - **Window snap (minimal)** — built-in commands for left half / right half / maximize (fill visible frame in the current Space — not macOS fullscreen) / reasonable size (~60% centered, Tinycast-style). Accessibility. Grow only with deliberate, small additions.
-- **Text expander (PoC)** — system-wide `$date` → `yyyy-MM-dd-HH-mm` (Tinycast-style CGEvent tap). Accessibility. No snippet UI / marketplace yet.
+- **Text expander (PoC)** — system-wide `$time` → `yyyy-MM-dd HH:mm` (Tinycast-style CGEvent tap). Accessibility. No snippet UI / marketplace yet.
 
 ## What Roocast Is NOT
 
 - Not a full window manager (no tiling layouts, grids, or multi-monitor choreography — use Rectangle or Magnet for that)
-- Not a full snippet manager (PoC `$date` only — no editor, sync, or Raycast import yet)
+- Not a full snippet manager (PoC `$time` only — no editor, sync, or Raycast import yet)
 - Not a workflow automator (use Shortcuts or Keyboard Maestro)
 - Not a replacement for Spotlight's file search (use HoudahSpot or find)
 
-Roocast is a **launcher with clipboard history, light window snap, and a minimal text expander**. It launches apps, finds files, runs commands, recalls what you copied, can pin a window to a half / fill the Space / reasonable size, and expands `$date`. That's it.
+Roocast is a **launcher with clipboard history, light window snap, and a minimal text expander**. It launches apps, finds files, runs commands, recalls what you copied, can pin a window to a half / fill the Space / reasonable size, and expands `$time`. That's it.
 
 ---
 

@@ -3,27 +3,27 @@ import Carbon.HIToolbox
 
 /// PoC text expander (Tinycast-style): listen-only CGEvent tap + keyword buffer.
 ///
-/// Built-in: typing `$date` expands to `yyyy-MM-dd-HH-mm` (e.g. `2026-10-21-11-57`).
+/// Built-in: typing `$time` expands to `yyyy-MM-dd HH:mm` (e.g. `2026-10-21 13:50`).
 /// Needs Accessibility (same grant as clipboard ⌘V / window snap).
 enum TextExpanderSnippets {
     /// Trigger typed by the user (case-insensitive match).
-    static let dateKeyword = "$date"
+    static let timeKeyword = "$time"
 
-    /// `2026-10-21-11-57` — sortable local datetime without seconds.
-    static func formattedDate(_ date: Date = Date(), calendar: Calendar = .current) -> String {
+    /// `2026-10-21 13:50` — local datetime without seconds.
+    static func formattedTime(_ date: Date = Date(), calendar: Calendar = .current) -> String {
         var calendar = calendar
         calendar.locale = Locale(identifier: "en_US_POSIX")
         let formatter = DateFormatter()
         formatter.calendar = calendar
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = calendar.timeZone
-        formatter.dateFormat = "yyyy-MM-dd-HH-mm"
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
         return formatter.string(from: date)
     }
 
     static func expansion(forKeyword keyword: String, now: Date = Date()) -> String? {
-        if keyword.lowercased() == dateKeyword {
-            return formattedDate(now)
+        if keyword.lowercased() == timeKeyword {
+            return formattedTime(now)
         }
         return nil
     }
@@ -54,7 +54,7 @@ struct TextExpanderPolicy: Sendable {
     private let nowProvider: @Sendable () -> Date
 
     init(
-        keyword: String = TextExpanderSnippets.dateKeyword,
+        keyword: String = TextExpanderSnippets.timeKeyword,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.keyword = keyword.lowercased()
@@ -174,7 +174,7 @@ private func textExpanderCallback(
     return Unmanaged.passUnretained(event)
 }
 
-/// Global `$date` → formatted datetime expander. One instance owned by `AppDelegate`.
+/// Global `$time` → formatted datetime expander. One instance owned by `AppDelegate`.
 @MainActor
 final class TextExpander {
     private var policy = TextExpanderPolicy()
