@@ -59,6 +59,32 @@ final class WindowSnapTests: XCTestCase {
         )
     }
 
+    func testReasonableSizeIsSixtyPercentCenteredCapped() {
+        // Typical laptop visible frame — 60% fits under the 1025×900 cap.
+        let visible = CGRect(x: 0, y: 40, width: 1440, height: 860)
+        let frame = WindowSnap.reasonableSizeFrame(of: visible)
+
+        XCTAssertEqual(frame.width, (1440 * 0.6).rounded())
+        XCTAssertEqual(frame.height, (860 * 0.6).rounded())
+        XCTAssertEqual(frame.midX, visible.midX, accuracy: 0.5)
+        XCTAssertEqual(frame.midY, visible.midY, accuracy: 0.5)
+        XCTAssertEqual(
+            WindowSnap.targetFrame(of: visible, command: .reasonableSize),
+            frame
+        )
+    }
+
+    func testReasonableSizeCapsOnLargeDisplay() {
+        // 5K-ish canvas: 60% would exceed Tinycast's 1025×900 ceiling.
+        let visible = CGRect(x: 0, y: 0, width: 5120, height: 2880)
+        let frame = WindowSnap.reasonableSizeFrame(of: visible)
+
+        XCTAssertEqual(frame.width, 1025)
+        XCTAssertEqual(frame.height, 900)
+        XCTAssertEqual(frame.midX, visible.midX, accuracy: 0.5)
+        XCTAssertEqual(frame.midY, visible.midY, accuracy: 0.5)
+    }
+
     func testWindowSnapCommandItems() {
         XCTAssertEqual(AppItem.leftHalf.kind, .leftHalf)
         XCTAssertEqual(AppItem.leftHalf.name, "Left Half")
@@ -67,5 +93,8 @@ final class WindowSnapTests: XCTestCase {
         XCTAssertEqual(AppItem.maximize.kind, .maximize)
         XCTAssertEqual(AppItem.maximize.name, "Maximize")
         XCTAssertTrue(AppItem.maximize.aliases.contains("max"))
+        XCTAssertEqual(AppItem.reasonableSize.kind, .reasonableSize)
+        XCTAssertEqual(AppItem.reasonableSize.name, "Reasonable Size")
+        XCTAssertTrue(AppItem.reasonableSize.aliases.contains("rs"))
     }
 }

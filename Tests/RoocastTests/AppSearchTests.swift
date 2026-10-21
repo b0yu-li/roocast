@@ -44,6 +44,18 @@ final class AppSearchTests: XCTestCase {
         XCTAssertFalse(AppSearch.matchesMaximizeCommand("fullscreen"))
     }
 
+    func testMatchesReasonableSizeCommand() {
+        XCTAssertTrue(AppSearch.matchesReasonableSizeCommand("re"))
+        XCTAssertTrue(AppSearch.matchesReasonableSizeCommand("reasonable"))
+        XCTAssertTrue(AppSearch.matchesReasonableSizeCommand("reasonable s"))
+        XCTAssertTrue(AppSearch.matchesReasonableSizeCommand("reasonable size"))
+        XCTAssertTrue(AppSearch.matchesReasonableSizeCommand("rs"))
+        XCTAssertTrue(AppSearch.matchesReasonableSizeCommand("reason"))
+        XCTAssertFalse(AppSearch.matchesReasonableSizeCommand(""))
+        XCTAssertFalse(AppSearch.matchesReasonableSizeCommand("rss"))
+        XCTAssertFalse(AppSearch.matchesReasonableSizeCommand("right"))
+    }
+
     func testResultsPutsQuitFirst() {
         let apps = [
             AppItem.stub(name: "Notes"),
@@ -75,6 +87,13 @@ final class AppSearchTests: XCTestCase {
         let apps = [AppItem.stub(name: "Mail")]
         let results = AppSearch.results(query: "max", apps: apps)
         XCTAssertEqual(results.first?.kind, .maximize)
+    }
+
+    func testResultsPutsReasonableSizeFirst() {
+        let apps = [AppItem.stub(name: "Notes")]
+        let results = AppSearch.results(query: "reasonable", apps: apps)
+        XCTAssertEqual(results.first?.kind, .reasonableSize)
+        XCTAssertEqual(AppSearch.results(query: "rs", apps: []).first?.kind, .reasonableSize)
     }
 
     func testResultsEmptyQueryShowsRunningSwitchSuggestions() {

@@ -8,6 +8,7 @@ struct AppItem: Identifiable, Hashable {
         case leftHalf
         case rightHalf
         case maximize
+        case reasonableSize
     }
 
     let id: UUID
@@ -156,6 +157,25 @@ struct AppItem: Identifiable, Hashable {
             profile: nil,
             aliases: ["max"],
             kind: .maximize
+        )
+    }()
+
+    /// Built-in command: ~60% of visible frame, capped, centered (Tinycast Reasonable Size).
+    static let reasonableSize: AppItem = {
+        let icon = NSImage(
+            systemSymbolName: "macwindow",
+            accessibilityDescription: "Reasonable Size"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: UUID(uuidString: "E5F6A7B8-C9D0-1234-EF01-345678901234")!,
+            name: "Reasonable Size",
+            path: "Command",
+            icon: icon,
+            isRunning: false,
+            profile: nil,
+            aliases: ["rs"],
+            kind: .reasonableSize
         )
     }()
 

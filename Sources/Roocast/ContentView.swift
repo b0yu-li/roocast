@@ -174,6 +174,12 @@ struct ContentView: View {
             return
         }
 
+        if app.kind == .reasonableSize {
+            query = ""
+            onWindowSnap?(.reasonableSize)
+            return
+        }
+
         if app.kind == .folder {
             NSWorkspace.shared.open(URL(fileURLWithPath: app.path, isDirectory: true))
             query = ""

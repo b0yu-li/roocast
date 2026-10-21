@@ -39,6 +39,15 @@ enum AppSearch {
         )
     }
 
+    /// Matches as the user types toward "reasonable" / "reasonable size" / alias "rs".
+    nonisolated static func matchesReasonableSizeCommand(_ query: String) -> Bool {
+        matchesWindowSnapCommand(
+            query,
+            phrases: ["reasonable", "reasonable size"],
+            aliases: ["rs"]
+        )
+    }
+
     /// Prefix match on display phrases, or exact alias (e.g. `lh`).
     nonisolated private static func matchesWindowSnapCommand(
         _ query: String,
@@ -87,6 +96,9 @@ enum AppSearch {
         }
         if matchesMaximizeCommand(lowered) {
             output.append(.maximize)
+        }
+        if matchesReasonableSizeCommand(lowered) {
+            output.append(.reasonableSize)
         }
         output.append(contentsOf: rank(query: lowered, apps: apps + folderItems))
         return output
