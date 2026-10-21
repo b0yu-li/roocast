@@ -14,6 +14,26 @@ final class AppSearchTests: XCTestCase {
         XCTAssertFalse(AppSearch.matchesQuitCommand("quite"))
     }
 
+    func testMatchesLeftHalfCommand() {
+        XCTAssertTrue(AppSearch.matchesLeftHalfCommand("l"))
+        XCTAssertTrue(AppSearch.matchesLeftHalfCommand("left"))
+        XCTAssertTrue(AppSearch.matchesLeftHalfCommand("left h"))
+        XCTAssertTrue(AppSearch.matchesLeftHalfCommand("left half"))
+        XCTAssertTrue(AppSearch.matchesLeftHalfCommand("lh"))
+        XCTAssertFalse(AppSearch.matchesLeftHalfCommand(""))
+        XCTAssertFalse(AppSearch.matchesLeftHalfCommand("right"))
+        XCTAssertFalse(AppSearch.matchesLeftHalfCommand("leftover"))
+    }
+
+    func testMatchesRightHalfCommand() {
+        XCTAssertTrue(AppSearch.matchesRightHalfCommand("r"))
+        XCTAssertTrue(AppSearch.matchesRightHalfCommand("right"))
+        XCTAssertTrue(AppSearch.matchesRightHalfCommand("right half"))
+        XCTAssertTrue(AppSearch.matchesRightHalfCommand("rh"))
+        XCTAssertFalse(AppSearch.matchesRightHalfCommand("left"))
+        XCTAssertFalse(AppSearch.matchesRightHalfCommand("rightly"))
+    }
+
     func testResultsPutsQuitFirst() {
         let apps = [
             AppItem.stub(name: "Notes"),
@@ -22,6 +42,23 @@ final class AppSearchTests: XCTestCase {
         let results = AppSearch.results(query: "qui", apps: apps)
         XCTAssertEqual(results.first?.kind, .quit)
         XCTAssertTrue(results.contains { $0.name == "Quitter" })
+    }
+
+    func testResultsPutsLeftHalfFirst() {
+        let apps = [AppItem.stub(name: "Letters")]
+        let results = AppSearch.results(query: "left", apps: apps)
+        XCTAssertEqual(results.first?.kind, .leftHalf)
+        XCTAssertFalse(results.contains { $0.kind == .rightHalf })
+    }
+
+    func testResultsPutsRightHalfFirst() {
+        let results = AppSearch.results(query: "right half", apps: [])
+        XCTAssertEqual(results.map(\.kind), [.rightHalf])
+    }
+
+    func testResultsAliasLhAndRh() {
+        XCTAssertEqual(AppSearch.results(query: "lh", apps: []).first?.kind, .leftHalf)
+        XCTAssertEqual(AppSearch.results(query: "rh", apps: []).first?.kind, .rightHalf)
     }
 
     func testResultsEmptyQueryShowsRunningSwitchSuggestions() {

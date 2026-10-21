@@ -7,3 +7,6 @@ DerivedData/
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
 .pi/context-mode
+
+# Third-party reference clones (local only — not part of Roocast)
+/reference/
