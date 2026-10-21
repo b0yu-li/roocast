@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: LauncherPanel?
     private var clipboardPanel: ClipboardPanel?
     private var hotKeyManager: HotKeyManager?
+    private var textExpander: TextExpander?
     private var navigationState = NavigationState()
     private var clipboardNavigationState = NavigationState()
     private let clipboardStore = ClipboardStore()
@@ -26,10 +27,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupClipboardPanel()
         setupHotKey()
         clipboardStore.startMonitoring()
+        let expander = TextExpander()
+        expander.start()
+        textExpander = expander
         panel?.show()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        textExpander?.stop()
+        textExpander = nil
         clipboardStore.stopMonitoring()
     }
 
