@@ -124,7 +124,7 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 
 - **Launcher** — ⌘Space summons app/folder search (global hotkey).
 - **Clipboard history** — ⌘Esc summons recent pasteboard items (global hotkey, same process).
-- **Window snap (minimal)** — built-in commands for left half / right half / maximize (fill the display’s visible frame in the current Space — not macOS fullscreen). Accessibility. Grow only with deliberate, small additions.
+- **Window snap (minimal)** — built-in commands for left half / right half / maximize (fill visible frame in the current Space — not macOS fullscreen) / reasonable size (~60% centered, Tinycast-style). Accessibility. Grow only with deliberate, small additions.
 
 ## What Roocast Is NOT
 
@@ -133,7 +133,7 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 - Not a workflow automator (use Shortcuts or Keyboard Maestro)
 - Not a replacement for Spotlight's file search (use HoudahSpot or find)
 
-Roocast is a **launcher with clipboard history and light window snap**. It launches apps, finds files, runs commands, recalls what you copied, and can pin a window to a half or fill the Space. That's it.
+Roocast is a **launcher with clipboard history and light window snap**. It launches apps, finds files, runs commands, recalls what you copied, and can pin a window to a half, fill the Space, or settle it to a reasonable size. That's it.
 
 ---
 

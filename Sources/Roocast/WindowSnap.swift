@@ -1,10 +1,11 @@
 import AppKit
 import ApplicationServices
 
-/// Built-in window snap: left / right half, or maximize within the current Space.
+/// Built-in window snap: left / right half, maximize, or reasonable size.
 ///
 /// Maximize fills `NSScreen.visibleFrame` (menu bar / Dock stay) — never toggles
 /// macOS `AXFullScreen` (which would create a new Space).
+/// Reasonable Size mirrors Tinycast: ~60% of the visible frame, capped, centered.
 ///
 /// Mirrors Tinycast's AX path (`AXGeometry` + `AXWindowAccess.write`):
 /// work in Accessibility top-left coordinates, resolve the target window on the
@@ -15,11 +16,18 @@ enum WindowSnap {
         case right
         /// Fill the display's visible frame (current Space). Not macOS fullscreen.
         case maximize
+        /// ~60% of visible frame, capped at 1025×900, centered (Tinycast).
+        case reasonableSize
     }
+
+    /// Tinycast `reasonableSizeFraction` — fraction of the visible canvas.
+    nonisolated static let reasonableSizeFraction: CGFloat = 0.6
+    /// Tinycast hard ceiling so 60% of a 5K display stays a usable window size.
+    nonisolated static let reasonableSizeMax = CGSize(width: 1025, height: 900)
 
     /// Split a visible frame into a left or right half (same math in AppKit or AX space).
     /// Odd pixel goes to the right half so the two halves cover the frame exactly.
-    /// Prefer `targetFrame` when the command may be `.maximize`.
+    /// Prefer `targetFrame` for maximize / reasonable size.
     nonisolated static func halfFrame(of visibleFrame: CGRect, side: Command) -> CGRect {
         let leftWidth = floor(visibleFrame.width / 2)
         switch side {
@@ -39,7 +47,38 @@ enum WindowSnap {
             )
         case .maximize:
             return visibleFrame
+        case .reasonableSize:
+            return reasonableSizeFrame(of: visibleFrame)
         }
+    }
+
+    /// Tinycast reasonable size: `min(canvas * 0.6, 1025×900)`, centered, edges rounded.
+    nonisolated static func reasonableSizeFrame(of visibleFrame: CGRect) -> CGRect {
+        let size = CGSize(
+            width: min(visibleFrame.width * reasonableSizeFraction, reasonableSizeMax.width),
+            height: min(visibleFrame.height * reasonableSizeFraction, reasonableSizeMax.height)
+        )
+        let centered = CGRect(
+            x: visibleFrame.minX + (visibleFrame.width - size.width) / 2,
+            y: visibleFrame.minY + (visibleFrame.height - size.height) / 2,
+            width: size.width,
+            height: size.height
+        )
+        return rounded(centered)
+    }
+
+    /// Round the four edges so shared boundaries stay pixel-aligned (Tinycast).
+    nonisolated static func rounded(_ rect: CGRect) -> CGRect {
+        let minX = rect.minX.rounded()
+        let minY = rect.minY.rounded()
+        let maxX = rect.maxX.rounded()
+        let maxY = rect.maxY.rounded()
+        return CGRect(
+            x: minX,
+            y: minY,
+            width: max(0, maxX - minX),
+            height: max(0, maxY - minY)
+        )
     }
 
     /// Target frame in the same coordinate space as `visibleFrame`.
@@ -49,6 +88,8 @@ enum WindowSnap {
             return halfFrame(of: visibleFrame, side: command)
         case .maximize:
             return visibleFrame
+        case .reasonableSize:
+            return reasonableSizeFrame(of: visibleFrame)
         }
     }
 
