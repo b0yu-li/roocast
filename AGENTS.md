@@ -125,6 +125,7 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 - **Launcher** — ⌘Space summons app/folder search (global hotkey).
 - **Clipboard history** — ⌘Esc summons recent pasteboard items (global hotkey, same process).
 - **Calculator (math)** — type an expression (`2+2`, `sqrt(9)`, `10% of 50`); a lead result row appears; Enter copies the answer. Tinycast-inspired, math-only (no units/currency/history yet).
+- **Zoxide jump** — type `z <keywords>` (e.g. `z downloads`); best frecent match via the `zoxide` CLI opens in Finder on Enter. Requires `zoxide` on the Mac (Homebrew path resolved explicitly for GUI apps).
 - **Window snap (minimal)** — built-in commands for left half / right half / maximize (fill visible frame in the current Space — not macOS fullscreen) / reasonable size (~60% centered, Tinycast-style). Accessibility. Grow only with deliberate, small additions.
 - **Text expander (PoC)** — system-wide `$time` → `yyyy-MM-dd HH:mm` (Tinycast-style CGEvent tap). Accessibility. No snippet UI / marketplace yet.
 
@@ -133,10 +134,11 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 - Not a full window manager (no tiling layouts, grids, or multi-monitor choreography — use Rectangle or Magnet for that)
 - Not a full calculator suite (math only — no unit/currency conversion or calc history UI yet; Tinycast does those)
 - Not a full snippet manager (PoC `$time` only — no editor, sync, or Raycast import yet)
+- Not a zoxide UI / DB editor (CLI match only — no interactive picker, import, or score editing)
 - Not a workflow automator (use Shortcuts or Keyboard Maestro)
 - Not a replacement for Spotlight's file search (use HoudahSpot or find)
 
-Roocast is a **launcher with clipboard history, quick math, light window snap, and a minimal text expander**. It launches apps, finds files, runs commands, recalls what you copied, evaluates expressions, can pin a window to a half / fill the Space / reasonable size, and expands `$time`. That's it.
+Roocast is a **launcher with clipboard history, quick math, zoxide jumps, light window snap, and a minimal text expander**. It launches apps, finds files, runs commands, recalls what you copied, evaluates expressions, jumps to frecent folders via `z`, can pin a window to a half / fill the Space / reasonable size, and expands `$time`. That's it.
 
 ---
 
