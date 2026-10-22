@@ -5,9 +5,16 @@ import AppKit
 final class AppIndex: ObservableObject {
     /// Readable so the UI can refresh arrow bounds when indexing finishes (empty summon).
     @Published private(set) var apps: [AppItem] = []
+    /// Latest zoxide folder row for the active `z <keywords>` query (async; never from body).
+    @Published private(set) var zoxideItem: AppItem? = nil
     /// Coalesce overlapping refreshes (init + panel-show) so flock probes never race.
     private var isIndexing = false
     private var needsReindex = false
+    /// Cancels in-flight `zoxide query` when the user keeps typing (`z abc` → `z abcd`).
+    private var zoxideTask: Task<Void, Never>?
+    private var zoxideGeneration = 0
+    /// Keywords key that `zoxideItem` (or a confirmed miss) corresponds to.
+    private var zoxideKey: String?
 
     init() {
         // Index off the critical path so panel creation never blocks on disk I/O.
@@ -112,6 +119,18 @@ final class AppIndex: ObservableObject {
     }
 
     func search(_ query: String) -> [AppItem] {
+        // Zoxide mode: never spawn a process here — `filteredApps` runs during SwiftUI
+        // body/layout. Sync `Process.waitUntilExit` nested the run loop and aborted
+        // AttributeGraph (see Roocast-2026-10-22-110706.ips). Results come from
+        // `scheduleZoxide(for:)` → `@Published zoxideItem`.
+        if let keywords = Zoxide.keywords(from: query) {
+            let key = Self.makeZoxideKey(keywords)
+            if let item = zoxideItem, zoxideKey == key {
+                return [item]
+            }
+            return []
+        }
+
         // Nonactivating panel keeps the prior app frontmost — use it to drop
         // the app the user is already in from empty-query switch suggestions.
         let frontmostPath = NSWorkspace.shared.frontmostApplication?.bundleURL?.path
@@ -121,6 +140,60 @@ final class AppIndex: ObservableObject {
             frontmostPath: frontmostPath,
             selfPath: Bundle.main.bundlePath
         )
+    }
+
+    /// Kick off / cancel zoxide CLI work as the query changes. Safe to call from
+    /// `onChange(of: query)` — never from a View body computed property.
+    func scheduleZoxide(for query: String) {
+        guard let keywords = Zoxide.keywords(from: query) else {
+            clearZoxide()
+            return
+        }
+        let key = Self.makeZoxideKey(keywords)
+        // Already have a settled answer for this exact keyword set.
+        if zoxideKey == key { return }
+
+        // Drop the previous row so we never show a stale folder for a newer query.
+        if zoxideItem != nil {
+            zoxideItem = nil
+        }
+        zoxideKey = nil
+        zoxideTask?.cancel()
+        zoxideGeneration += 1
+        let generation = zoxideGeneration
+        FocusRestorer.log("zoxide: query gen=\(generation) \(keywords.joined(separator: " "))")
+
+        zoxideTask = Task { [weak self] in
+            let path = await Task.detached(priority: .userInitiated) {
+                Zoxide.bestMatch(keywords: keywords)
+            }.value
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let self, generation == self.zoxideGeneration else { return }
+                if let path {
+                    self.zoxideItem = AppItem.zoxide(path: path)
+                    self.zoxideKey = key
+                    FocusRestorer.log("zoxide: match gen=\(generation) \(path)")
+                } else {
+                    self.zoxideItem = nil
+                    self.zoxideKey = key
+                    FocusRestorer.log("zoxide: no match gen=\(generation)")
+                }
+            }
+        }
+    }
+
+    private func clearZoxide() {
+        zoxideTask?.cancel()
+        zoxideTask = nil
+        zoxideGeneration += 1
+        guard zoxideItem != nil || zoxideKey != nil else { return }
+        zoxideItem = nil
+        zoxideKey = nil
+    }
+
+    private nonisolated static func makeZoxideKey(_ keywords: [String]) -> String {
+        keywords.joined(separator: "\u{1f}")
     }
 
     /// Matches as the user types toward "quit" / "quit roocast".

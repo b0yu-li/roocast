@@ -132,12 +132,18 @@ struct ContentView: View {
                 isSearchFocused = true
             }
         }
-        .onChange(of: query) { _, _ in
+        .onChange(of: query) { _, newQuery in
+            // Async zoxide — must not run inside `filteredApps` / body (Process nested
+            // the run loop during layout and SIGABRT'd AttributeGraph).
+            appIndex.scheduleZoxide(for: newQuery)
             navigationState.sync(itemCount: filteredApps.count)
         }
         // Empty-summon list appears when indexing finishes — query never changes, so
         // refresh arrow bounds whenever the index updates.
         .onChange(of: appIndex.apps) { _, _ in
+            navigationState.updateBounds(itemCount: filteredApps.count)
+        }
+        .onChange(of: appIndex.zoxideItem) { _, _ in
             navigationState.updateBounds(itemCount: filteredApps.count)
         }
         .environmentObject(navigationState)

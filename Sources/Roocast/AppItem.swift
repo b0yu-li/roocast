@@ -216,6 +216,37 @@ struct AppItem: Identifiable, Hashable {
         )
     }
 
+    /// Zoxide frecent match — folder name with abbreviated path as quiet label.
+    /// Enter opens `path` in Finder (same as built-in folder shortcuts).
+    /// Call from the async zoxide completion path only — not during SwiftUI body.
+    static func zoxide(path: String) -> AppItem {
+        let url = URL(fileURLWithPath: path, isDirectory: true)
+        // Copy before resizing — `icon(forFile:)` may return a shared instance.
+        let workspaceIcon = NSWorkspace.shared.icon(forFile: path)
+        let icon = (workspaceIcon.copy() as? NSImage) ?? NSImage(size: NSSize(width: 32, height: 32))
+        icon.size = NSSize(width: 32, height: 32)
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        // `z ~` → show "~" rather than the username component of $HOME.
+        let name: String
+        if path == home {
+            name = "~"
+        } else if url.lastPathComponent.isEmpty {
+            name = path
+        } else {
+            name = url.lastPathComponent
+        }
+        return AppItem(
+            id: nameBasedUUID("roocast.zoxide:\(path)"),
+            name: name,
+            path: path,
+            icon: icon,
+            isRunning: false,
+            profile: path == home ? nil : Zoxide.abbreviate(path),
+            aliases: [],
+            kind: .folder
+        )
+    }
+
     /// Lightweight item for unit tests / ranking — no disk icon lookup.
     static func stub(
         name: String,
