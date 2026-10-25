@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var clipboardPanel: ClipboardPanel?
     private var hotKeyManager: HotKeyManager?
     private var textExpander: TextExpander?
+    private var appToggleMonitor: AppToggleMonitor?
     private var navigationState = NavigationState()
     private var clipboardNavigationState = NavigationState()
     private let clipboardStore = ClipboardStore()
@@ -30,10 +31,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let expander = TextExpander()
         expander.start()
         textExpander = expander
+        let toggles = AppToggleMonitor()
+        toggles.start()
+        appToggleMonitor = toggles
         panel?.show()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        appToggleMonitor?.stop()
+        appToggleMonitor = nil
         textExpander?.stop()
         textExpander = nil
         clipboardStore.stopMonitoring()

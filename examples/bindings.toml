@@ -1,0 +1,19 @@
+# Roocast app toggles — copy to ~/.config/roocast/bindings.toml
+#
+# Left Control + key:
+#   - target app frontmost → hide
+#   - running but behind  → activate
+#   - not running         → launch
+#
+# Chord is swallowed (focused app never sees it). Needs Accessibility.
+
+[[toggle]]
+key = "t"
+modifiers = ["leftControl"]
+app = "Ghostty"
+bundle_id = "com.mitchellh.ghostty"
+
+# [[toggle]]
+# key = "c"
+# modifiers = ["leftControl"]
+# bundle_id = "com.google.Chrome"
