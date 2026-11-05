@@ -205,10 +205,8 @@ struct ContentView: View {
         if let profile = app.profile {
             AppLauncher.launchFirefoxProfile(profile: profile, appPath: app.path)
         } else {
-            // Standard launch
-            if let url = URL(string: "file://\(app.path)") {
-                NSWorkspace.shared.open(url)
-            }
+            // Standard launch — activates + unminimizes if already running
+            AppActivator.activateOrLaunch(appPath: app.path)
         }
 
         // Clear so the next open starts with an empty search field
