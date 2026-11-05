@@ -131,10 +131,17 @@ class FloatingPanel: NSPanel {
     }
 
     /// Hide and activate the prior app (clipboard paste path). Returns the target if any.
+    ///
+    /// Caret-safe: the click fallback that FocusRestorer uses for Metal terminals
+    /// must NEVER run on this path — a click inside a text view moves the caret,
+    /// so ⌘V would paste at the click point instead of the user's cursor. When the
+    /// nonactivating panel never stole activation, the prior app still holds focus
+    /// and no restore is needed at all: the caret is exactly where the user left it.
     @discardableResult
     func hideForPaste() -> NSRunningApplication? {
         let ourPID = ProcessInfo.processInfo.processIdentifier
         let rememberedPID = previousAppPID
+        let stoleActivation = didStealActivation
         var appToRestore = previouslyActiveApp
         let snapshot = previousFocusSnapshot
         clearPreviousFocus()
@@ -167,11 +174,21 @@ class FloatingPanel: NSPanel {
             return nil
         }
 
-        let activated = app.activate()
-        FocusRestorer.log(
-            "\(logPrefix)hideForPaste: activate \(app.localizedName ?? "?") pid=\(app.processIdentifier) ok=\(activated)"
-        )
-        FocusRestorer.restore(app: app, snapshot: snapshot)
+        if stoleActivation {
+            let activated = app.activate()
+            FocusRestorer.log(
+                "\(logPrefix)hideForPaste: activate \(app.localizedName ?? "?") pid=\(app.processIdentifier) ok=\(activated)"
+            )
+            // Clicks are forbidden here — they reposition the caret (see doc comment).
+            FocusRestorer.restore(app: app, snapshot: snapshot, allowClick: false)
+        } else {
+            // Happy path: the nonactivating panel never took activation, so the
+            // prior app is still active with its caret untouched. Just hand back
+            // the app so the ⌘V poster waits for it.
+            FocusRestorer.log(
+                "\(logPrefix)hideForPaste: activation intact — skip restore, paste target \(app.localizedName ?? "?")"
+            )
+        }
         return app
     }
 
