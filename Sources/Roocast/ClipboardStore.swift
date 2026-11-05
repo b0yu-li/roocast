@@ -33,6 +33,19 @@ struct ClipboardItem: Identifiable, Equatable, Codable {
 /// (`ThisDeviceOnly`). The file alone is useless on another Mac.
 @MainActor
 final class ClipboardStore: ObservableObject {
+    /// Marker we attach to the pasteboard when *we* write to it, so polling
+    /// ignores our own pastes. A foreign copy clears the pasteboard first,
+    /// which wipes the marker — so the poll only ever skips a genuine self-write.
+    static let internalType = NSPasteboard.PasteboardType("com.roocast.internal")
+
+    /// Never record secrets: skip copies tagged sensitive by any of the marker owners
+    /// (password managers, 1Password, Keychain, etc. use the nspasteboard conventions).
+    static let sensitiveTypes: Set<NSPasteboard.PasteboardType> = [
+        .init("org.nspasteboard.ConcealedType"),
+        .init("org.nspasteboard.TransientType"),
+        .init("com.apple.is-sensitive"),
+    ]
+
     @Published private(set) var items: [ClipboardItem] = []
 
     private let maxItems: Int
@@ -47,8 +60,6 @@ final class ClipboardStore: ObservableObject {
     private var pollSource: DispatchSourceTimer?
     private let pollQueue = DispatchQueue(label: "com.roocast.clipboard.poll", qos: .utility)
     private var lastChangeCount: Int = -1
-    /// Skip the next change when we write the pasteboard ourselves (paste path).
-    private var ignoreNextChange = false
     private var persistWorkItem: DispatchWorkItem?
     private var didLoadFromDisk = false
     private var cachedEncryptionKey: SymmetricKey?
@@ -137,14 +148,24 @@ final class ClipboardStore: ObservableObject {
         persistNow()
     }
 
-    /// Writes text to the general pasteboard without recording a duplicate history entry.
+    /// Writes text to the general pasteboard without re-recording it in history.
+    /// Self-writes are stamped with `internalType` so the poll can identify them
+    /// by content, not by a changeCount flag (which races with foreign copies).
     func copyToPasteboard(_ text: String) {
-        ignoreNextChange = true
         let pb = NSPasteboard.general
         pb.clearContents()
+        pb.declareTypes([.string, Self.internalType], owner: nil)
         pb.setString(text, forType: .string)
-        lastChangeCount = pb.changeCount
-        FocusRestorer.log("clipboard: wrote \(text.count) chars to pasteboard (changeCount=\(lastChangeCount))")
+        pb.setData(Data(), forType: Self.internalType)
+        // Load-bearing: a mismatched count means a foreign write the next poll
+        // must still see — only sync when the pasteboard is still ours.
+        let count = pb.changeCount
+        if NSPasteboard.general.changeCount == count {
+            lastChangeCount = count
+        }
+        // Re-recency: pasting from history moves the row back to the top.
+        promote(text: text)
+        FocusRestorer.log("clipboard: wrote \(text.count) chars to pasteboard (changeCount=\(count))")
     }
 
     /// Case-insensitive substring filter; empty query returns full history (newest first).
@@ -159,23 +180,30 @@ final class ClipboardStore: ObservableObject {
         insertItem(text: text, persist: true)
     }
 
+    /// Move an existing item (matched by text) back to the top of the history.
+    private func promote(text: String) {
+        guard let index = items.firstIndex(where: { $0.text == text }) else { return }
+        guard index != 0 else { return }
+        let item = items.remove(at: index)
+        items.insert(item, at: 0)
+    }
+
     // MARK: - Pasteboard watch
 
     private func handlePoll(changeCount count: Int) {
         guard count != lastChangeCount else { return }
         lastChangeCount = count
 
-        if ignoreNextChange {
-            ignoreNextChange = false
-            FocusRestorer.log("clipboard: skipped self-write changeCount=\(count)")
-            return
-        }
-
         ingestCurrentPasteboardIfNeeded()
     }
 
     private func ingestCurrentPasteboardIfNeeded() {
         let pb = NSPasteboard.general
+        // Our own write — the marker only exists while our content is current.
+        if pb.types?.contains(Self.internalType) == true { return }
+        // Never record secrets (password managers, etc.).
+        if let types = pb.types, !Set(types).isDisjoint(with: Self.sensitiveTypes) { return }
+
         guard let text = pb.string(forType: .string)?
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !text.isEmpty
@@ -195,9 +223,13 @@ final class ClipboardStore: ObservableObject {
             return false
         }
 
-        // Deduplicate consecutive identical copies.
-        if items.first?.text == text {
-            return false
+        // Deduplicate: a re-copy of anything already in history promotes it to
+        // the top instead of being dropped for being non-consecutive.
+        if let index = items.firstIndex(where: { $0.text == text }) {
+            let existing = items.remove(at: index)
+            items.insert(existing, at: 0)
+            if persist { schedulePersist() }
+            return true
         }
 
         let item = ClipboardItem(id: UUID(), text: text, createdAt: Date())

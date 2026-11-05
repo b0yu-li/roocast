@@ -26,6 +26,24 @@ final class ClipboardStoreTests: XCTestCase {
         XCTAssertEqual(store.items.map(\.text), ["four", "three", "two"])
     }
 
+    /// Re-copying an older item promotes it to the top instead of being dropped
+    /// (dedup is history-wide, not consecutive-only).
+    func testRecopyPromotesExistingItemToTop() {
+        let store = ClipboardStore(maxItems: 10, persistToDisk: false)
+        store.prependForTesting("alpha")
+        store.prependForTesting("beta")
+        store.prependForTesting("gamma")
+        XCTAssertEqual(store.items.map(\.text), ["gamma", "beta", "alpha"])
+
+        store.prependForTesting("alpha")
+        XCTAssertEqual(store.items.map(\.text), ["alpha", "gamma", "beta"])
+        XCTAssertEqual(store.items.count, 3)
+
+        // Re-copying the top item keeps a single entry (no duplicate row).
+        store.prependForTesting("alpha")
+        XCTAssertEqual(store.items.map(\.text), ["alpha", "gamma", "beta"])
+    }
+
     func testItemsMatchingFiltersCaseInsensitive() {
         let store = ClipboardStore(maxItems: 10, persistToDisk: false)
         store.prependForTesting("Hello World")

@@ -138,7 +138,15 @@ enum FocusRestorer {
         return Snapshot(window: window, element: element, clickPoint: clickPoint)
     }
 
-    static func restore(app: NSRunningApplication, snapshot: Snapshot, attempt: Int = 0) {
+    /// Restores app/window/element focus. `allowClick: false` (clipboard paste path)
+    /// disables the synthetic-click fallback: clicking the remembered element's
+    /// center moves the text caret, so a paste would land at the click point.
+    static func restore(
+        app: NSRunningApplication,
+        snapshot: Snapshot,
+        attempt: Int = 0,
+        allowClick: Bool = true
+    ) {
         guard !app.isTerminated else { return }
 
         if attempt == 0 {
@@ -182,14 +190,22 @@ enum FocusRestorer {
             )
         }
 
-        if PanelFocusPolicy.shouldClickOnRestoreAttempt(attempt), let point = snapshot.clickPoint {
+        if allowClick,
+           PanelFocusPolicy.shouldClickOnRestoreAttempt(attempt),
+           let point = snapshot.clickPoint
+        {
             click(at: point)
         }
 
         if attempt < PanelFocusPolicy.maxRestoreAttempt {
             let delay = PanelFocusPolicy.restoreDelaySeconds(forAttempt: attempt)
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                restore(app: app, snapshot: snapshot, attempt: attempt + 1)
+                restore(
+                    app: app,
+                    snapshot: snapshot,
+                    attempt: attempt + 1,
+                    allowClick: allowClick
+                )
             }
         }
     }
