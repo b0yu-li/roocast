@@ -7,6 +7,7 @@ struct AppLauncher {
     /// Launch Firefox with a specific profile.
     /// - If that profile is already running, activates *that* process (by lock PID).
     /// - If not, opens a new instance with `-no-remote` so a second profile can run.
+    @MainActor
     static func launchFirefoxProfile(profile: String, appPath: String) {
         let profiles = ProfileManager.detectFirefoxProfiles()
         guard let matched = profiles.first(where: { $0.name == profile }) else {
@@ -23,10 +24,11 @@ struct AppLauncher {
 
     /// Bring the Firefox process that owns this profile to the front.
     /// Must not use `.first` Firefox — multiple instances share one bundle ID.
+    @MainActor
     private static func activateFirefoxProfile(_ profile: FirefoxProfile, appPath: String) {
         if let pid = ProfileManager.pidHoldingParentLock(at: profile.path),
            let app = NSRunningApplication(processIdentifier: pid) {
-            app.activate(options: [.activateAllWindows])
+            AppActivator.restore(app)
             return
         }
 
@@ -34,7 +36,7 @@ struct AppLauncher {
         let running = NSWorkspace.shared.runningApplications
             .filter { $0.bundleIdentifier == "org.mozilla.firefox" && !$0.isTerminated }
         if let app = running.first {
-            app.activate(options: [.activateAllWindows])
+            AppActivator.restore(app)
             return
         }
 
