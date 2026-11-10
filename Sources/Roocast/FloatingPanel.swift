@@ -8,6 +8,7 @@ class FloatingPanel: NSPanel {
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onEnter: (() -> Void)?
+    var onDeleteKey: (() -> Void)?
 
     /// Prior app captured at show — must be **strong**.
     /// A weak `NSRunningApplication` from `frontmostApplication` often deallocates
@@ -236,6 +237,9 @@ class FloatingPanel: NSPanel {
             case KeyCode.returnKey, KeyCode.keypadEnter:
                 onEnter?()
                 return
+            case KeyCode.forwardDelete:
+                onDeleteKey?()
+                return
             case KeyCode.escape:
                 hide(restoreFocus: true)
                 return
@@ -262,4 +266,6 @@ enum KeyCode {
     static let escape: UInt16 = 53
     static let upArrow: UInt16 = 126
     static let downArrow: UInt16 = 125
+    /// fn+backspace — delete the selected row (tinycast parity).
+    static let forwardDelete: UInt16 = 117
 }
