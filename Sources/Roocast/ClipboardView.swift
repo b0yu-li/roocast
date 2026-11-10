@@ -71,6 +71,15 @@ struct ClipboardView: View {
                                             navigationState.selectedIndex = index
                                             pasteSelected()
                                         }
+                                        .contextMenu {
+                                            // Tinycast parity: per-row "Delete Entry".
+                                            Button(role: .destructive) {
+                                                store.remove(item)
+                                                navigationState.updateBounds(itemCount: filteredItems.count)
+                                            } label: {
+                                                Label("Delete Entry", systemImage: "trash")
+                                            }
+                                        }
                                 }
                             }
                         }
@@ -114,6 +123,9 @@ struct ClipboardView: View {
         .onReceive(NotificationCenter.default.publisher(for: .pasteSelectedClipboardItem)) { _ in
             pasteSelected()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .deleteSelectedClipboardItem)) { _ in
+            deleteSelected()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .clipboardWillShow)) { _ in
             query = ""
             navigationState.sync(itemCount: filteredItems.count)
@@ -139,6 +151,17 @@ struct ClipboardView: View {
         return "No results"
     }
 
+
+    /// Forward-delete (fn+⌫) on the highlighted row removes it and clamps the
+    /// selection, mirroring tinycast's `delete(at: selection)`.
+    private func deleteSelected() {
+        guard !filteredItems.isEmpty,
+              navigationState.selectedIndex < filteredItems.count
+        else { return }
+        let item = filteredItems[navigationState.selectedIndex]
+        store.remove(item)
+        navigationState.updateBounds(itemCount: filteredItems.count)
+    }
 
     private func pasteSelected() {
         guard !filteredItems.isEmpty else {

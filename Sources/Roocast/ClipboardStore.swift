@@ -1,7 +1,8 @@
 import AppKit
 import Combine
-import CryptoKit
+import CryptoKit // Legacy .enc migration only — drop with migrateLegacyEncrypted
 import Foundation
+import Security // Legacy .enc migration only
 
 struct ClipboardItem: Identifiable, Equatable, Codable {
     let id: UUID
@@ -20,7 +21,7 @@ struct ClipboardItem: Identifiable, Equatable, Codable {
     }
 }
 
-/// Watches the general pasteboard and keeps a bounded, encrypted disk-backed history.
+/// Watches the general pasteboard and keeps a bounded, disk-backed history.
 ///
 /// **Why polling:** AppKit has no public notification when *other apps* change
 /// `NSPasteboard.general`. Clipboard managers (including Maccy) poll `changeCount`.
@@ -29,8 +30,10 @@ struct ClipboardItem: Identifiable, Equatable, Codable {
 /// (~every 2s). Pasteboard string reads and `@Published` updates hop to the
 /// main actor, so idle main-thread cost is near zero.
 ///
-/// **Encryption:** History is AES-GCM sealed with a Keychain key
-/// (`ThisDeviceOnly`). The file alone is useless on another Mac.
+/// **At rest:** Plain JSON under Application Support. FileVault is the at-rest
+/// layer — the old AES-GCM/Keychain scheme only re-implemented what the
+/// platform already guarantees, and coupled history to a signing identity.
+/// (The pre-v0.10 encrypted blob is migrated once, then the crypto goes away.)
 @MainActor
 final class ClipboardStore: ObservableObject {
     /// Marker we attach to the pasteboard when *we* write to it, so polling
@@ -54,27 +57,15 @@ final class ClipboardStore: ObservableObject {
     private let persistDebounce: TimeInterval
     /// `nil` disables disk I/O (useful in unit tests that only exercise filtering).
     private let storageURL: URL?
-    /// Injected for tests; production uses Keychain via `ClipboardCrypto.loadOrCreateKey()`.
-    private let injectedEncryptionKey: SymmetricKey?
 
     private var pollSource: DispatchSourceTimer?
     private let pollQueue = DispatchQueue(label: "com.roocast.clipboard.poll", qos: .utility)
     private var lastChangeCount: Int = -1
     private var persistWorkItem: DispatchWorkItem?
     private var didLoadFromDisk = false
-    private var cachedEncryptionKey: SymmetricKey?
 
-    /// Default on-disk path: encrypted blob under Application Support.
+    /// Default on-disk path: plain JSON under Application Support.
     nonisolated static var defaultStorageURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(
-                "Library/Application Support/Roocast/clipboard-history.enc",
-                isDirectory: false
-            )
-    }
-
-    /// Legacy plaintext path from the first persistence PoC — migrated on load.
-    nonisolated static var legacyPlaintextStorageURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(
                 "Library/Application Support/Roocast/clipboard-history.json",
@@ -82,25 +73,39 @@ final class ClipboardStore: ObservableObject {
             )
     }
 
+    /// Legacy AES-GCM blob (pre-v0.10) — decrypted once and removed on load.
+    nonisolated static var legacyEncryptedStorageURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(
+                "Library/Application Support/Roocast/clipboard-history.enc",
+                isDirectory: false
+            )
+    }
+
+    /// Keychain slot the legacy encrypted format kept its AES key in.
+    nonisolated static let legacyKeychainService = "com.roocast.app.clipboard"
+    nonisolated static let legacyKeychainAccount = "history-aes-key"
+    /// File magic the legacy encrypted format started with.
+    nonisolated static let legacyMagic = Data("ROOCST01".utf8)
+
     /// - Parameters:
     ///   - storageURL: Explicit file URL. Ignored when `persistToDisk` is false.
-    ///   - persistToDisk: When true (default), writes encrypted history to disk.
-    ///   - encryptionKey: Optional fixed key (tests). Production omits this and uses Keychain.
+    ///   - persistToDisk: When true (default), writes JSON history to disk.
     ///   - pollInterval: Background changeCount check interval (default 2s — latency is fine).
+    ///   - maxItems: History bound. 200 keeps several days of typical copying —
+    ///     50 (the old cap) evicted anything older within a day (per focus.log).
     init(
-        maxItems: Int = 50,
+        maxItems: Int = 200,
         maxTextLength: Int = 100_000,
         pollInterval: TimeInterval = 2.0,
         persistDebounce: TimeInterval = 0.5,
         storageURL: URL? = nil,
-        persistToDisk: Bool = true,
-        encryptionKey: SymmetricKey? = nil
+        persistToDisk: Bool = true
     ) {
         self.maxItems = max(1, maxItems)
         self.maxTextLength = max(1, maxTextLength)
         self.pollInterval = max(0.5, pollInterval)
         self.persistDebounce = persistDebounce
-        self.injectedEncryptionKey = encryptionKey
         if persistToDisk {
             self.storageURL = storageURL ?? Self.defaultStorageURL
         } else {
@@ -180,6 +185,15 @@ final class ClipboardStore: ObservableObject {
         insertItem(text: text, persist: true)
     }
 
+    /// Delete one entry (tinycast's "Delete Entry") and persist immediately —
+    /// a deliberate action must not ride the insert debounce.
+    func remove(_ item: ClipboardItem) {
+        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+        items.remove(at: index)
+        persistNow()
+        FocusRestorer.log("clipboard: removed item (history=\(items.count))")
+    }
+
     /// Move an existing item (matched by text) back to the top of the history.
     private func promote(text: String) {
         guard let index = items.firstIndex(where: { $0.text == text }) else { return }
@@ -204,6 +218,10 @@ final class ClipboardStore: ObservableObject {
         // Never record secrets (password managers, etc.).
         if let types = pb.types, !Set(types).isDisjoint(with: Self.sensitiveTypes) { return }
 
+        // TODO(image support, intake tinycast): capture .png/.tiff copies here.
+        // Tinycast re-encodes TIFF→PNG off the poll thread (Task.detached — a
+        // big image takes 100ms+) and stores the PNG blob in an images dir,
+        // with the row holding a path; paste writes the PNG back to the board.
         guard let text = pb.string(forType: .string)?
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !text.isEmpty
@@ -244,18 +262,19 @@ final class ClipboardStore: ObservableObject {
         return true
     }
 
-    // MARK: - Disk persistence (encrypted)
+    // MARK: - Disk persistence
 
-    private func encryptionKey() throws -> SymmetricKey {
-        if let injectedEncryptionKey {
-            return injectedEncryptionKey
+    private func loadJSON(from url: URL) {
+        do {
+            let data = try Data(contentsOf: url)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let decoded = try decoder.decode([ClipboardItem].self, from: data)
+            items = Array(decoded.prefix(maxItems))
+            FocusRestorer.log("clipboard: loaded \(items.count) items from disk")
+        } catch {
+            FocusRestorer.log("clipboard: failed to load history — \(error.localizedDescription)")
         }
-        if let cachedEncryptionKey {
-            return cachedEncryptionKey
-        }
-        let key = try ClipboardCrypto.loadOrCreateKey()
-        cachedEncryptionKey = key
-        return key
     }
 
     private func loadFromDiskIfNeeded() {
@@ -264,50 +283,77 @@ final class ClipboardStore: ObservableObject {
         guard let url = storageURL else { return }
 
         if FileManager.default.fileExists(atPath: url.path) {
-            loadEncryptedOrLegacy(from: url, removeLegacyPlaintext: false)
+            loadJSON(from: url)
             return
         }
 
-        // Migrate first-PoC plaintext JSON if present.
-        let legacy = Self.legacyPlaintextStorageURL
+        // One-shot: decrypt the pre-v0.10 encrypted blob into plain JSON.
+        let legacy = Self.legacyEncryptedStorageURL
         if storageURL == Self.defaultStorageURL,
            FileManager.default.fileExists(atPath: legacy.path)
         {
-            FocusRestorer.log("clipboard: migrating legacy plaintext history")
-            loadEncryptedOrLegacy(from: legacy, removeLegacyPlaintext: true)
-            // Rewrite encrypted at the new path.
-            persistNow()
+            migrateLegacyEncrypted(from: legacy, to: url)
             return
         }
 
         FocusRestorer.log("clipboard: no history file yet at \(url.path)")
     }
 
-    private func loadEncryptedOrLegacy(from url: URL, removeLegacyPlaintext: Bool) {
+    /// Decrypts the pre-v0.10 AES-GCM blob into plain JSON at `to`, then removes
+    /// the blob and its Keychain key. On failure the blob is left untouched
+    /// (next launch retries) — history must never be lost to a cleanup.
+    private func migrateLegacyEncrypted(from url: URL, to: URL) {
         do {
-            let data = try Data(contentsOf: url)
-            let plaintext: Data
-            if ClipboardCrypto.isEncryptedBlob(data) {
-                let key = try encryptionKey()
-                plaintext = try ClipboardCrypto.open(data, using: key)
-            } else {
-                // Legacy unencrypted JSON from the first persistence PoC.
-                plaintext = data
-                FocusRestorer.log("clipboard: loaded legacy plaintext (will re-encrypt on save)")
+            let blob = try Data(contentsOf: url)
+            guard let key = Self.legacyKeychainKey() else {
+                FocusRestorer.log("clipboard: legacy key missing from Keychain — cannot migrate")
+                return
             }
+            let plaintext = try Self.decryptLegacyBlob(blob, using: key)
 
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
-            let decoded = try decoder.decode([ClipboardItem].self, from: plaintext)
-            items = Array(decoded.prefix(maxItems))
-            FocusRestorer.log("clipboard: loaded \(items.count) items from disk")
-
-            if removeLegacyPlaintext {
-                try? FileManager.default.removeItem(at: url)
-            }
+            items = Array(try decoder.decode([ClipboardItem].self, from: plaintext).prefix(maxItems))
+            persistNow()
+            try? FileManager.default.removeItem(at: url)
+            Self.deleteLegacyKeychainKey()
+            FocusRestorer.log("clipboard: migrated legacy encrypted history (\(items.count) items)")
         } catch {
-            FocusRestorer.log("clipboard: failed to load history — \(error.localizedDescription)")
+            FocusRestorer.log("clipboard: legacy migration failed — \(error.localizedDescription)")
         }
+    }
+
+    /// Decrypts a legacy "ROOCST01"-prefixed AES-GCM blob. Test seam for the
+    /// format itself; production feeds it the Keychain key.
+    nonisolated static func decryptLegacyBlob(_ blob: Data, using key: SymmetricKey) throws -> Data {
+        guard blob.count > legacyMagic.count, blob.prefix(legacyMagic.count) == legacyMagic else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        let box = try AES.GCM.SealedBox(combined: blob.dropFirst(legacyMagic.count))
+        return try AES.GCM.open(box, using: key)
+    }
+
+    /// The AES key the legacy format kept in the Keychain (read-only).
+    nonisolated private static func legacyKeychainKey() -> SymmetricKey? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: legacyKeychainService,
+            kSecAttrAccount as String: legacyKeychainAccount,
+            kSecReturnData as String: true,
+        ]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess, let data = item as? Data, data.count == 32 else { return nil }
+        return SymmetricKey(data: data)
+    }
+
+    nonisolated private static func deleteLegacyKeychainKey() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: legacyKeychainService,
+            kSecAttrAccount as String: legacyKeychainAccount,
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 
     private func schedulePersist() {
@@ -320,7 +366,7 @@ final class ClipboardStore: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + persistDebounce, execute: work)
     }
 
-    /// Atomic encrypted write of the current history snapshot.
+    /// Atomic write of the current history snapshot.
     func persistNow() {
         guard let url = storageURL else { return }
         let snapshot = items
@@ -332,17 +378,15 @@ final class ClipboardStore: ObservableObject {
             encoder.outputFormatting = [.sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
             let json = try encoder.encode(snapshot)
-            let key = try encryptionKey()
-            let sealed = try ClipboardCrypto.seal(json, using: key)
 
             let tmp = url.appendingPathExtension("tmp")
-            try sealed.write(to: tmp, options: .atomic)
+            try json.write(to: tmp, options: .atomic)
             if FileManager.default.fileExists(atPath: url.path) {
                 try FileManager.default.removeItem(at: url)
             }
             try FileManager.default.moveItem(at: tmp, to: url)
             FocusRestorer.log(
-                "clipboard: persisted \(snapshot.count) items encrypted (\(sealed.count) bytes)"
+                "clipboard: persisted \(snapshot.count) items (\(json.count) bytes)"
             )
         } catch {
             FocusRestorer.log("clipboard: persist failed — \(error.localizedDescription)")

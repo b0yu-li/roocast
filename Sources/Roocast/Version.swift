@@ -3,7 +3,7 @@ import Foundation
 // Auto-generated version file
 struct AppVersion {
     static let major = 0
-    static let minor = 9
+    static let minor = 10
     static let patch = 0
     
     static var string: String {

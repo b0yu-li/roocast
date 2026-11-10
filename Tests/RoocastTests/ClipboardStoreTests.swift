@@ -56,86 +56,73 @@ final class ClipboardStoreTests: XCTestCase {
         XCTAssertTrue(store.items(matching: "xyz").isEmpty)
     }
 
-    func testDefaultStorageURLIsEncryptedUnderApplicationSupport() {
+    func testDefaultStorageURLIsPlainJSONUnderApplicationSupport() {
         let path = ClipboardStore.defaultStorageURL.path
-        XCTAssertTrue(path.contains("Library/Application Support/Roocast/clipboard-history.enc"))
+        XCTAssertTrue(path.contains("Library/Application Support/Roocast/clipboard-history.json"))
     }
 
-    func testPersistsEncryptedAndReloadsFromDisk() throws {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("roocast-clipboard-tests-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
-
-        let url = dir.appendingPathComponent("clipboard-history.enc")
-        let key = SymmetricKey(size: .bits256)
-
-        let writer = ClipboardStore(maxItems: 5, storageURL: url, encryptionKey: key)
-        writer.prependForTesting("alpha")
-        writer.prependForTesting("beta")
-        writer.persistNow()
-
-        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
-        let onDisk = try Data(contentsOf: url)
-        XCTAssertTrue(ClipboardCrypto.isEncryptedBlob(onDisk))
-        XCTAssertThrowsError(try JSONDecoder().decode([ClipboardItem].self, from: onDisk))
-
-        let reader = ClipboardStore(maxItems: 5, storageURL: url, encryptionKey: key)
-        reader.loadPersistedHistory()
-
-        XCTAssertEqual(reader.items.map(\.text), ["beta", "alpha"])
-    }
-
-    func testWrongKeyCannotDecrypt() throws {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("roocast-clipboard-tests-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
-
-        let url = dir.appendingPathComponent("clipboard-history.enc")
-        let writerKey = SymmetricKey(size: .bits256)
-        let wrongKey = SymmetricKey(size: .bits256)
-
-        let writer = ClipboardStore(maxItems: 5, storageURL: url, encryptionKey: writerKey)
-        writer.prependForTesting("secret")
-        writer.persistNow()
-
-        let reader = ClipboardStore(maxItems: 5, storageURL: url, encryptionKey: wrongKey)
-        reader.loadPersistedHistory()
-        XCTAssertTrue(reader.items.isEmpty)
-    }
-
-    func testMigratesLegacyPlaintextJSON() throws {
+    func testPersistsPlainJSONAndReloadsFromDisk() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("roocast-clipboard-tests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
 
         let url = dir.appendingPathComponent("clipboard-history.json")
-        let key = SymmetricKey(size: .bits256)
-        let items = [
-            ClipboardItem(id: UUID(), text: "legacy", createdAt: Date(timeIntervalSince1970: 1_700_000_000))
-        ]
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        try encoder.encode(items).write(to: url)
 
-        let store = ClipboardStore(maxItems: 5, storageURL: url, encryptionKey: key)
-        store.loadPersistedHistory()
-        XCTAssertEqual(store.items.map(\.text), ["legacy"])
+        let writer = ClipboardStore(maxItems: 5, storageURL: url)
+        writer.prependForTesting("alpha")
+        writer.prependForTesting("beta")
+        writer.persistNow()
 
-        store.persistNow()
-        let rewritten = try Data(contentsOf: url)
-        XCTAssertTrue(ClipboardCrypto.isEncryptedBlob(rewritten))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+        let onDisk = try Data(contentsOf: url)
+        // Plain JSON on disk — readable without any key.
+        XCTAssertTrue(String(data: onDisk, encoding: .utf8)?.hasPrefix("[") == true)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        XCTAssertEqual(
+            try decoder.decode([ClipboardItem].self, from: onDisk).count, 2
+        )
+
+        let reader = ClipboardStore(maxItems: 5, storageURL: url)
+        reader.loadPersistedHistory()
+
+        XCTAssertEqual(reader.items.map(\.text), ["beta", "alpha"])
     }
 
-    func testSealOpenRoundTrip() throws {
+    /// The one-shot .enc → .json migration must decrypt the old format exactly.
+    func testDecryptLegacyBlobRoundTrip() throws {
         let key = SymmetricKey(size: .bits256)
         let plain = Data("hello clipboard".utf8)
-        let sealed = try ClipboardCrypto.seal(plain, using: key)
-        XCTAssertTrue(ClipboardCrypto.isEncryptedBlob(sealed))
-        let opened = try ClipboardCrypto.open(sealed, using: key)
+        let sealed = try AES.GCM.seal(plain, using: key)
+        let blob = ClipboardStore.legacyMagic + sealed.combined!
+
+        let opened = try ClipboardStore.decryptLegacyBlob(blob, using: key)
         XCTAssertEqual(opened, plain)
+
+        // A blob without the magic prefix is rejected, not force-decoded.
+        XCTAssertThrowsError(try ClipboardStore.decryptLegacyBlob(plain, using: key))
+    }
+
+    func testRemoveDeletesEntryByIdAndPersists() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("roocast-clipboard-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let url = dir.appendingPathComponent("clipboard-history.json")
+        let store = ClipboardStore(maxItems: 5, storageURL: url)
+        store.prependForTesting("keep me")
+        store.prependForTesting("delete me")
+        let victim = store.items.first!
+
+        store.remove(victim)
+
+        XCTAssertEqual(store.items.map(\.text), ["keep me"])
+
+        let reader = ClipboardStore(maxItems: 5, storageURL: url)
+        reader.loadPersistedHistory()
+        XCTAssertEqual(reader.items.map(\.text), ["keep me"])
     }
 
     func testSkipsOversizedItems() {
