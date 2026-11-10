@@ -287,6 +287,7 @@ enum AppToggleAction {
             let roots = [
                 URL(fileURLWithPath: "/Applications"),
                 URL(fileURLWithPath: "/System/Applications"),
+                URL(fileURLWithPath: "/System/Library/CoreServices/Applications"),
                 FileManager.default.homeDirectoryForCurrentUser
                     .appendingPathComponent("Applications"),
             ]

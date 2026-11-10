@@ -11,3 +11,6 @@ DerivedData/
 
 # Third-party reference clones (local only — not part of Roocast)
 /reference/
+
+# Local task backlog (session notes, future work) — never commit
+/.backlog/
