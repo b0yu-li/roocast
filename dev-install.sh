@@ -116,11 +116,34 @@ else
     cp -R "${BUILD_DIR}/${BUNDLE_NAME}" "${INSTALL_DIR}/"
 fi
 
-# Explicit adhoc sign with stable identifier (linker-signed alone is flaky with TCC).
-if codesign --force --deep --sign - --identifier "com.roocast.app" "${INSTALL_PATH}" 2>/dev/null; then
-    echo "   Signed adhoc as com.roocast.app"
+# Sign with a *stable* identity. TCC (Privacy → Accessibility) anchors to the
+# designated requirement: adhoc → CDHash (changes every build → grant churn),
+# a certificate → anchored to the cert (grant survives rebuilds).
+# Explicit override: ROOCAST_SIGN_IDENTITY="Apple Development: Name (ID)" ./dev-install.sh
+# (Apple Development keys in the Data-Protection keychain are invisible to
+# find-identity, so they are opt-in rather than auto-picked; note the cert
+# expires yearly, which would churn the Accessibility grant on renewal.)
+# Default preference: any valid codesigning identity (e.g. a self-signed
+# cert — stable and long-lived) → adhoc fallback.
+IDENTITY="${ROOCAST_SIGN_IDENTITY:-}"
+if [ -z "${IDENTITY}" ]; then
+    IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '$0 ~ /^[[:space:]]*[0-9]+\)/ && /"/{print $2; exit}')"
+fi
+IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development/{print $2; exit}')"
+if [ -z "${IDENTITY}" ]; then
+    IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '$0 ~ /^[[:space:]]*[0-9]+\)/ && /"/{print $2; exit}')"
+fi
+
+if [ -n "${IDENTITY}" ]; then
+    if codesign --force --deep --sign "${IDENTITY}" --identifier "com.roocast.app" "${INSTALL_PATH}" 2>/dev/null; then
+        echo "   Signed with stable identity \"${IDENTITY}\" — Accessibility grant survives rebuilds"
+    else
+        echo "   ⚠️  Signing with \"${IDENTITY}\" failed — falling back to adhoc." >&2
+        codesign --force --deep --sign - --identifier "com.roocast.app" "${INSTALL_PATH}" 2>/dev/null || true
+    fi
 else
-    echo "   ⚠️  codesign failed — Accessibility may need a manual toggle after install." >&2
+    echo "   ⚠️  No stable signing identity found — signing adhoc (Accessibility will need re-granting after install)." >&2
+    codesign --force --deep --sign - --identifier "com.roocast.app" "${INSTALL_PATH}" 2>/dev/null || true
 fi
 
 echo "✅ ${APP_NAME} ${VERSION} installed to ${INSTALL_PATH}"
