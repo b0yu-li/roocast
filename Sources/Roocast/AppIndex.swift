@@ -76,6 +76,7 @@ final class AppIndex: ObservableObject {
         let searchPaths = [
             URL(fileURLWithPath: "/Applications"),
             URL(fileURLWithPath: "/System/Applications"),
+            URL(fileURLWithPath: "/System/Library/CoreServices/Applications"),
             FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications"),
         ]
 
