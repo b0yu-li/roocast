@@ -54,9 +54,12 @@ enum FocusRestorer {
     /// When `prompt` is true and untrusted, shows the system dialog **at most once**
     /// per process. Calling this on every Enter used to spam the Accessibility sheet.
     ///
-    /// Adhoc-signed builds: after enabling Roocast in Privacy → Accessibility, **quit and
-    /// relaunch** Roocast — TCC often only applies to a new process. Each reinstall can
-    /// also create a new TCC identity (new CDHash).
+    /// After enabling Roocast in Privacy → Accessibility, **quit and relaunch**
+    /// Roocast — TCC often only applies to a new process.
+    ///
+    /// Signing: `dev-install.sh` signs with a stable certificate identity when one
+    /// exists, so the Accessibility grant survives rebuilds. Adhoc fallback builds
+    /// change the CDHash each install and require re-granting.
     @discardableResult
     static func ensureTrusted(prompt: Bool) -> Bool {
         if isTrusted() { return true }
