@@ -66,6 +66,7 @@ final class AppIndex: ObservableObject {
             NSWorkspace.shared.runningApplications
                 .filter { $0.activationPolicy == .regular }
                 .compactMap { $0.bundleURL?.path }
+                .map { Self.canonicalPath($0) }
         )
         
         // Detect Firefox profiles once; running state uses the same list (no double detect).
@@ -81,15 +82,20 @@ final class AppIndex: ObservableObject {
         ]
 
         for baseURL in searchPaths {
+            // NOTE: no `.skipsHiddenFiles` here — the root-owned /Applications/Safari.app
+            // symlink into the Safari cryptex carries the UF_HIDDEN flag, so that option
+            // silently dropped Safari from the index. Dot-files are filtered by name below.
             guard let enumerator = FileManager.default.enumerator(
                 at: baseURL,
                 includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+                options: [.skipsPackageDescendants]
             ) else { continue }
 
             while let fileURL = enumerator.nextObject() as? URL {
+                // Name-based hidden filter (replaces `.skipsHiddenFiles`, see note above).
+                guard !fileURL.lastPathComponent.hasPrefix(".") else { continue }
                 if fileURL.pathExtension == "app" {
-                    let isRunning = runningBundlePaths.contains(fileURL.path)
+                    let isRunning = runningBundlePaths.contains(Self.canonicalPath(fileURL.path))
                     
                     // Check if this is Firefox with profiles
                     if fileURL.lastPathComponent == "Firefox.app", !firefoxProfiles.isEmpty {
@@ -117,6 +123,14 @@ final class AppIndex: ObservableObject {
         }
 
         return found.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    /// Resolve symlinks/firmlinks so indexed bundles match the path the running app
+    /// reports: the running Safari announces the cryptex path
+    /// (/System/Volumes/Preboot/Cryptexes/…) while the index holds the
+    /// /Applications/Safari.app symlink — exact string comparison missed it.
+    nonisolated static func canonicalPath(_ path: String) -> String {
+        URL(fileURLWithPath: path).resolvingSymlinksInPath().path
     }
 
     func search(_ query: String) -> [AppItem] {
