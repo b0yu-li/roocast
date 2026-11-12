@@ -62,7 +62,10 @@ struct ClipboardView: View {
         .frame(width: ClipboardLayout.width, height: ClipboardLayout.height)
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: ClipboardLayout.cornerRadius, style: .continuous))
-        .onAppear { handleAppear() }
+        .onAppear {
+            FocusRestorer.log("debug: ClipboardView onAppear sel=\(navigationState.selectedIndex) items=\(filteredItems.count)")
+            handleAppear()
+        }
         // onReceive (not addObserver) so @State/@ObservedObject stay live — stale
         // captures were silently no-op'ing Enter paste when query/filter disagreed.
         .onReceive(NotificationCenter.default.publisher(for: .pasteSelectedClipboardItem)) { _ in
@@ -206,7 +209,11 @@ struct ClipboardView: View {
     /// A single history row: tap pastes, right-click opens the actions menu,
     /// and the row reports its frame for the ⌘K menu anchor.
     private func historyRow(item: ClipboardItem, index: Int) -> some View {
-        ClipboardRow(item: item, isSelected: index == navigationState.selectedIndex)
+        // The row observes NavigationState itself: LazyVStack can drop a row's
+        // update during a scroll transaction (seen as two highlighted rows —
+        // the just-deselected row never re-rendered), so selection must not
+        // depend on the parent re-diffing the row.
+        return ClipboardRow(item: item, index: index, navigationState: navigationState)
             .id(item.id)
             .onTapGesture {
                 navigationState.selectedIndex = index
@@ -453,7 +460,10 @@ struct ClipboardActionsMenuView: View {
 
 struct ClipboardRow: View {
     let item: ClipboardItem
-    let isSelected: Bool
+    let index: Int
+    @ObservedObject var navigationState: NavigationState
+
+    private var isSelected: Bool { index == navigationState.selectedIndex }
 
     var body: some View {
         HStack(spacing: 10) {
