@@ -2,6 +2,8 @@ import SwiftUI
 import AppKit
 
 final class ClipboardPanel: FloatingPanel {
+    let menuModel = ClipboardActionsModel()
+
     init(store: ClipboardStore, navigationState: NavigationState, onPaste: @escaping (ClipboardItem) -> Void) {
         super.init(
             size: NSSize(width: ClipboardLayout.width, height: ClipboardLayout.height),
@@ -12,6 +14,7 @@ final class ClipboardPanel: FloatingPanel {
         installHostingController(
             ClipboardView(
                 store: store,
+                menuModel: menuModel,
                 navigationState: navigationState,
                 onPaste: onPaste,
                 onDismiss: { [weak self] in
@@ -19,6 +22,15 @@ final class ClipboardPanel: FloatingPanel {
                 }
             )
         )
+        // ⌘K toggles the actions menu — deletes are menu-only, no chords.
+        onCommandK = { [weak self] in
+            self?.menuModel.toggle()
+        }
+        // While the menu (or its confirm) is up, keys route to the menu.
+        onMenuKey = { [weak self] keyCode in
+            guard let self else { return false }
+            return self.menuModel.handleKey(keyCode)
+        }
     }
 
     func show() {
