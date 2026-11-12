@@ -8,7 +8,11 @@ class FloatingPanel: NSPanel {
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onEnter: (() -> Void)?
-    var onDeleteKey: (() -> Void)?
+    /// ⌘K toggles the row actions menu (Raycast-style) before the search field sees it.
+    var onCommandK: (() -> Void)?
+    /// While the actions menu is up, navigation keys route to the menu; return true
+    /// if consumed, false to let the key fall through to the search field.
+    var onMenuKey: ((UInt16) -> Bool)?
 
     /// Prior app captured at show — must be **strong**.
     /// A weak `NSRunningApplication` from `frontmostApplication` often deallocates
@@ -224,27 +228,37 @@ class FloatingPanel: NSPanel {
     }
 
     override func sendEvent(_ event: NSEvent) {
-        // Only intercept bare navigation keys. Leave ⌘C / ⌘X / ⌘V / etc. alone
-        // so the search field's performKeyEquivalent can handle edit shortcuts.
-        if event.type == .keyDown, Self.isBareNavigationModifiers(event.modifierFlags) {
-            switch event.keyCode {
-            case KeyCode.upArrow:
-                onArrowUp?()
+        if event.type == .keyDown {
+            // ⌘K toggles the row actions menu (Raycast-style) before the search
+            // field sees it — the menu is the delete path, so no direct chords.
+            if event.keyCode == KeyCode.k, Self.isBareCommand(event.modifierFlags) {
+                onCommandK?()
                 return
-            case KeyCode.downArrow:
-                onArrowDown?()
-                return
-            case KeyCode.returnKey, KeyCode.keypadEnter:
-                onEnter?()
-                return
-            case KeyCode.forwardDelete:
-                onDeleteKey?()
-                return
-            case KeyCode.escape:
-                hide(restoreFocus: true)
-                return
-            default:
-                break
+            }
+            // Only intercept bare navigation keys. Leave ⌘C / ⌘X / ⌘V / etc. alone
+            // so the search field's performKeyEquivalent can handle edit shortcuts.
+            if Self.isBareNavigationModifiers(event.modifierFlags) {
+                // The actions menu consumes navigation keys when open; letters
+                // still fall through to the search field (and close the menu).
+                if let onMenuKey, onMenuKey(event.keyCode) {
+                    return
+                }
+                switch event.keyCode {
+                case KeyCode.upArrow:
+                    onArrowUp?()
+                    return
+                case KeyCode.downArrow:
+                    onArrowDown?()
+                    return
+                case KeyCode.returnKey, KeyCode.keypadEnter:
+                    onEnter?()
+                    return
+                case KeyCode.escape:
+                    hide(restoreFocus: true)
+                    return
+                default:
+                    break
+                }
             }
         }
         super.sendEvent(event)
@@ -257,6 +271,14 @@ class FloatingPanel: NSPanel {
             .intersection([.command, .option, .control])
             .isEmpty
     }
+
+    /// Bare ⌘ — no shift, option, or control riding along (⌘K only, not ⌘⇧K).
+    private static func isBareCommand(_ flags: NSEvent.ModifierFlags) -> Bool {
+        flags
+            .intersection(.deviceIndependentFlagsMask)
+            .intersection([.command, .shift, .option, .control])
+            == NSEvent.ModifierFlags.command
+    }
 }
 
 /// Carbon / AppKit virtual key codes used by floating panels.
@@ -266,6 +288,9 @@ enum KeyCode {
     static let escape: UInt16 = 53
     static let upArrow: UInt16 = 126
     static let downArrow: UInt16 = 125
-    /// fn+backspace — delete the selected row (tinycast parity).
+    /// Bare ⌘K — the row actions menu toggle on the clipboard panel.
+    static let k: UInt16 = 40
+    /// fn+backspace — tinycast parity: delete entry chords removed, deletes are
+    /// menu-only (⌘K → select → enter), so this key no longer deletes.
     static let forwardDelete: UInt16 = 117
 }

@@ -62,8 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wireNavigation(
             clipboardPanel,
             state: clipboardNavigationState,
-            enterNotification: .pasteSelectedClipboardItem,
-            deleteNotification: .deleteSelectedClipboardItem
+            enterNotification: .pasteSelectedClipboardItem
         )
         self.clipboardPanel = clipboardPanel
     }
@@ -71,8 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func wireNavigation(
         _ panel: FloatingPanel,
         state: NavigationState,
-        enterNotification: Notification.Name,
-        deleteNotification: Notification.Name? = nil
+        enterNotification: Notification.Name
     ) {
         panel.onArrowUp = { [weak state] in
             state?.moveUp()
@@ -82,11 +80,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         panel.onEnter = {
             NotificationCenter.default.post(name: enterNotification, object: nil)
-        }
-        if let deleteNotification {
-            panel.onDeleteKey = {
-                NotificationCenter.default.post(name: deleteNotification, object: nil)
-            }
         }
     }
 
@@ -147,6 +140,5 @@ extension Notification.Name {
     static let launchSelectedApp = Notification.Name("launchSelectedApp")
     static let launcherWillShow = Notification.Name("launcherWillShow")
     static let pasteSelectedClipboardItem = Notification.Name("pasteSelectedClipboardItem")
-    static let deleteSelectedClipboardItem = Notification.Name("deleteSelectedClipboardItem")
     static let clipboardWillShow = Notification.Name("clipboardWillShow")
 }

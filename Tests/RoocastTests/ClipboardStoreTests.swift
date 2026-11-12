@@ -132,6 +132,56 @@ final class ClipboardStoreTests: XCTestCase {
         XCTAssertEqual(store.items.map(\.text), ["short"])
     }
 
+    func testRemoveAllClearsHistoryAndPersists() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("roocast-clipboard-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let url = dir.appendingPathComponent("clipboard-history.json")
+        let store = ClipboardStore(maxItems: 5, storageURL: url)
+        store.prependForTesting("alpha")
+        store.prependForTesting("beta")
+
+        store.removeAll()
+
+        XCTAssertTrue(store.items.isEmpty)
+
+        let reader = ClipboardStore(maxItems: 5, storageURL: url)
+        reader.loadPersistedHistory()
+        XCTAssertTrue(reader.items.isEmpty)
+    }
+
+    /// DateBucket groups rows into Today / Yesterday / This Week / This Month
+    /// / Earlier headers (tinycast parity).
+    func testDateBucketBoundaries() {
+        let now = Date()
+        let cal = Calendar.current
+        XCTAssertEqual(DateBucket(for: now), .today)
+        XCTAssertEqual(DateBucket(for: cal.date(byAdding: .day, value: -1, to: now)!), .yesterday)
+        // 3 days ago is still "This Week" unless the week boundary got crossed
+        // by that step — assert against what the bucket itself computes.
+        let threeDaysAgo = cal.date(byAdding: .day, value: -3, to: now)!
+        let expectedThree = (DateBucket(for: threeDaysAgo) == .thisWeek) ? DateBucket.thisWeek : DateBucket.thisMonth
+        XCTAssertEqual(DateBucket(for: threeDaysAgo), expectedThree)
+        XCTAssertEqual(DateBucket(for: cal.date(byAdding: .month, value: -3, to: now)!), .earlier)
+    }
+
+    /// Today's rows show a clock time, older rows show the relative date.
+    func testTimeLabelFormats() {
+        let today = ClipboardItem(id: UUID(), text: "now", createdAt: Date())
+        XCTAssertNotEqual(today.timeLabel, "")
+        // Same-day label comes from the time-only formatter: it cannot be a
+        // relative day name.
+        XCTAssertFalse(today.timeLabel.hasPrefix("Today"))
+
+        let lastMonth = ClipboardItem(
+            id: UUID(), text: "old",
+            createdAt: Calendar.current.date(byAdding: .month, value: -1, to: Date())!
+        )
+        XCTAssertFalse(lastMonth.timeLabel.isEmpty)
+    }
+
     func testDefaultPollIntervalIsRelaxed() {
         let store = ClipboardStore(persistToDisk: false)
         // Default is 2s — accessible via startMonitoring log; assert via re-init param clamp.

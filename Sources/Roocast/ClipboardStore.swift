@@ -19,6 +19,30 @@ struct ClipboardItem: Identifiable, Equatable, Codable {
         let end = collapsed.index(collapsed.startIndex, offsetBy: 120)
         return String(collapsed[..<end]) + "…"
     }
+
+    /// When the entry was copied — today shows a clock time, older shows the
+    /// relative date ("Yesterday", "Nov 8, 2026").
+    var timeLabel: String {
+        if Calendar.current.isDateInToday(createdAt) {
+            return Self.timeOnlyFormatter.string(from: createdAt)
+        }
+        return Self.relativeDateFormatter.string(from: createdAt)
+    }
+
+    private static let timeOnlyFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    private static let relativeDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        formatter.doesRelativeDateFormatting = true
+        return formatter
+    }()
 }
 
 /// Watches the general pasteboard and keeps a bounded, disk-backed history.
@@ -192,6 +216,14 @@ final class ClipboardStore: ObservableObject {
         items.remove(at: index)
         persistNow()
         FocusRestorer.log("clipboard: removed item (history=\(items.count))")
+    }
+
+    /// Delete every entry (tinycast's "Delete All Entries") and persist immediately —
+    /// a deliberate action must not ride the insert debounce.
+    func removeAll() {
+        items.removeAll()
+        persistNow()
+        FocusRestorer.log("clipboard: removed all items")
     }
 
     /// Move an existing item (matched by text) back to the top of the history.
