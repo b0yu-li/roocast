@@ -7,6 +7,10 @@ struct AppItem: Identifiable, Hashable {
         case folder
         case leftHalf
         case rightHalf
+        case topHalf
+        case bottomHalf
+        case firstThird
+        case lastTwoThirds
         case maximize
         case reasonableSize
         /// Lead calculator row — Enter copies `copyText`.
@@ -178,6 +182,82 @@ struct AppItem: Identifiable, Hashable {
             profile: nil,
             aliases: ["rs"],
             kind: .reasonableSize
+        )
+    }()
+
+    /// Built-in command: snap the prior focused window to the top half of its display.
+    static let topHalf: AppItem = {
+        let icon = NSImage(
+            systemSymbolName: "rectangle.tophalf.filled",
+            accessibilityDescription: "Top Half"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: UUID(uuidString: "F6A7B8C9-D0E1-2345-F012-456789012345")!,
+            name: "Top Half",
+            path: "Command",
+            icon: icon,
+            isRunning: false,
+            profile: nil,
+            aliases: ["th", "top"],
+            kind: .topHalf
+        )
+    }()
+
+    /// Built-in command: snap the prior focused window to the bottom half of its display.
+    static let bottomHalf: AppItem = {
+        let icon = NSImage(
+            systemSymbolName: "rectangle.bottomhalf.filled",
+            accessibilityDescription: "Bottom Half"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: UUID(uuidString: "A7B8C9D0-E1F2-3456-0123-567890123456")!,
+            name: "Bottom Half",
+            path: "Command",
+            icon: icon,
+            isRunning: false,
+            profile: nil,
+            aliases: ["bh", "bottom"],
+            kind: .bottomHalf
+        )
+    }()
+
+    /// Built-in command: snap to the leading third of the display (Tinycast First Third).
+    static let firstThird: AppItem = {
+        let icon = NSImage(
+            systemSymbolName: "rectangle.leadingthird.inset.filled",
+            accessibilityDescription: "First Third"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: UUID(uuidString: "B8C9D0E1-F2A3-4567-1234-678901234567")!,
+            name: "First Third",
+            path: "Command",
+            icon: icon,
+            isRunning: false,
+            profile: nil,
+            aliases: ["ft"],
+            kind: .firstThird
+        )
+    }()
+
+    /// Built-in command: snap to the trailing two-thirds of the display (Tinycast Last Two Thirds).
+    static let lastTwoThirds: AppItem = {
+        let icon = NSImage(
+            systemSymbolName: "rectangle.trailingthird.inset.filled",
+            accessibilityDescription: "Last Two Thirds"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: UUID(uuidString: "C9D0E1F2-A3B4-5678-2345-789012345678")!,
+            name: "Last Two Thirds",
+            path: "Command",
+            icon: icon,
+            isRunning: false,
+            profile: nil,
+            aliases: ["ltt"],
+            kind: .lastTwoThirds
         )
     }()
 

@@ -126,7 +126,7 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 - **Clipboard history** — ⌘Esc summons recent pasteboard items (global hotkey, same process).
 - **Calculator (math)** — type an expression (`2+2`, `sqrt(9)`, `10% of 50`); a lead result row appears; Enter copies the answer. Tinycast-inspired, math-only (no units/currency/history yet).
 - **Zoxide jump** — type `z <keywords>` (e.g. `z downloads`); best frecent match via the `zoxide` CLI opens in Finder on Enter. Requires `zoxide` on the Mac (Homebrew path resolved explicitly for GUI apps).
-- **Window snap (minimal)** — built-in commands for left half / right half / maximize (fill visible frame in the current Space — not macOS fullscreen) / reasonable size (~60% centered, Tinycast-style). Accessibility. Grow only with deliberate, small additions.
+- **Window snap (minimal)** — built-in commands for left / right / top / bottom half, first third / last two thirds, maximize (fill visible frame in the current Space — not macOS fullscreen) / reasonable size (~60% centered, Tinycast-style). Accessibility. Grow only with deliberate, small additions.
 - **Text expander (PoC)** — system-wide `$time` → `yyyy-MM-dd HH:mm` (Tinycast-style CGEvent tap). Accessibility. No snippet UI / marketplace yet.
 - **App toggle (hyper-like)** — Left Control + key chords from `~/.config/roocast/bindings.toml` show/hide a few apps (e.g. Left Control+T → Ghostty). Swallows the chord. Accessibility. Not a full Hyper key remapper.
 
@@ -137,10 +137,11 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 - Not a full snippet manager (PoC `$time` only — no editor, sync, or Raycast import yet)
 - Not a zoxide UI / DB editor (CLI match only — no interactive picker, import, or score editing)
 - Not a Hyper key / Karabiner replacement (a few Left-Control app toggles only — no caps-lock remap or system-wide layers)
+- Not a system appearance toggler yet (Tinycast System Events path needs Automation; prefs write unproven — see `docs/BACKLOG.md`)
 - Not a workflow automator (use Shortcuts or Keyboard Maestro)
 - Not a replacement for Spotlight's file search (use HoudahSpot or find)
 
-Roocast is a **launcher with clipboard history, quick math, zoxide jumps, light window snap, a minimal text expander, and a few Left-Control app toggles**. It launches apps, finds files, runs commands, recalls what you copied, evaluates expressions, jumps to frecent folders via `z`, can pin a window to a half / fill the Space / reasonable size, expands `$time`, and can toggle Ghostty-class apps from a TOML config. That's it.
+Roocast is a **launcher with clipboard history, quick math, zoxide jumps, light window snap, a minimal text expander, and a few Left-Control app toggles**. It launches apps, finds files, runs commands, recalls what you copied, evaluates expressions, jumps to frecent folders via `z`, can pin a window to a half / third / fill the Space / reasonable size, expands `$time`, and can toggle Ghostty-class apps from a TOML config. That's it.
 
 ---
 

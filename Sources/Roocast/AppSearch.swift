@@ -41,15 +41,51 @@ enum AppSearch {
 
     /// Matches as the user types toward "reasonable" / "reasonable size" / alias "rs".
     nonisolated static func matchesReasonableSizeCommand(_ query: String) -> Bool {
-        matchesWindowSnapCommand(
+        matchesBuiltInCommand(
             query,
             phrases: ["reasonable", "reasonable size"],
             aliases: ["rs"]
         )
     }
 
+    /// Matches as the user types toward "top" / "top half" / alias "th".
+    nonisolated static func matchesTopHalfCommand(_ query: String) -> Bool {
+        matchesWindowSnapCommand(
+            query,
+            phrases: ["top", "top half"],
+            aliases: ["th"]
+        )
+    }
+
+    /// Matches as the user types toward "bottom" / "bottom half" / alias "bh".
+    nonisolated static func matchesBottomHalfCommand(_ query: String) -> Bool {
+        matchesWindowSnapCommand(
+            query,
+            phrases: ["bottom", "bottom half"],
+            aliases: ["bh"]
+        )
+    }
+
+    /// Matches as the user types toward "first" / "first third" / alias "ft".
+    nonisolated static func matchesFirstThirdCommand(_ query: String) -> Bool {
+        matchesWindowSnapCommand(
+            query,
+            phrases: ["first", "first third", "third"],
+            aliases: ["ft"]
+        )
+    }
+
+    /// Matches as the user types toward "last two thirds" / alias "ltt".
+    nonisolated static func matchesLastTwoThirdsCommand(_ query: String) -> Bool {
+        matchesWindowSnapCommand(
+            query,
+            phrases: ["last two thirds", "last two", "two thirds"],
+            aliases: ["ltt"]
+        )
+    }
+
     /// Prefix match on display phrases, or exact alias (e.g. `lh`).
-    nonisolated private static func matchesWindowSnapCommand(
+    nonisolated private static func matchesBuiltInCommand(
         _ query: String,
         phrases: [String],
         aliases: [String]
@@ -58,6 +94,15 @@ enum AppSearch {
         guard !lowered.isEmpty else { return false }
         if aliases.contains(lowered) { return true }
         return phrases.contains { $0.hasPrefix(lowered) }
+    }
+
+    /// Prefix match on display phrases, or exact alias (e.g. `lh`).
+    nonisolated private static func matchesWindowSnapCommand(
+        _ query: String,
+        phrases: [String],
+        aliases: [String]
+    ) -> Bool {
+        matchesBuiltInCommand(query, phrases: phrases, aliases: aliases)
     }
 
     /// Built-in commands first (if matched), then apps + folders by `IntentionScore`.
@@ -103,6 +148,18 @@ enum AppSearch {
         }
         if matchesReasonableSizeCommand(lowered) {
             output.append(.reasonableSize)
+        }
+        if matchesTopHalfCommand(lowered) {
+            output.append(.topHalf)
+        }
+        if matchesBottomHalfCommand(lowered) {
+            output.append(.bottomHalf)
+        }
+        if matchesFirstThirdCommand(lowered) {
+            output.append(.firstThird)
+        }
+        if matchesLastTwoThirdsCommand(lowered) {
+            output.append(.lastTwoThirds)
         }
         output.append(contentsOf: rank(query: lowered, apps: apps + folderItems))
         return output

@@ -1,11 +1,12 @@
 import AppKit
 import ApplicationServices
 
-/// Built-in window snap: left / right half, maximize, or reasonable size.
+/// Built-in window snap: halves, thirds, maximize, or reasonable size.
 ///
 /// Maximize fills `NSScreen.visibleFrame` (menu bar / Dock stay) — never toggles
 /// macOS `AXFullScreen` (which would create a new Space).
 /// Reasonable Size mirrors Tinycast: ~60% of the visible frame, capped, centered.
+/// Thirds / top / bottom use Tinycast fractional tiles with edge rounding.
 ///
 /// Mirrors Tinycast's AX path (`AXGeometry` + `AXWindowAccess.write`):
 /// work in Accessibility top-left coordinates, resolve the target window on the
@@ -14,6 +15,14 @@ enum WindowSnap {
     enum Command: Hashable {
         case left
         case right
+        /// Full-width top half (partition Y; span X).
+        case top
+        /// Full-width bottom half (partition Y; span X).
+        case bottom
+        /// Leading third column (sets X and Y to the tile).
+        case firstThird
+        /// Trailing two-thirds column (sets X and Y to the tile).
+        case lastTwoThirds
         /// Fill the display's visible frame (current Space). Not macOS fullscreen.
         case maximize
         /// ~60% of visible frame, capped at 1025×900, centered (Tinycast).
@@ -24,10 +33,11 @@ enum WindowSnap {
     nonisolated static let reasonableSizeFraction: CGFloat = 0.6
     /// Tinycast hard ceiling so 60% of a 5K display stays a usable window size.
     nonisolated static let reasonableSizeMax = CGSize(width: 1025, height: 900)
+    nonisolated private static let oneThird: CGFloat = 1.0 / 3.0
 
     /// Split a visible frame into a left or right half (same math in AppKit or AX space).
     /// Odd pixel goes to the right half so the two halves cover the frame exactly.
-    /// Prefer `targetFrame` for maximize / reasonable size.
+    /// Prefer `targetFrame` for other commands.
     nonisolated static func halfFrame(of visibleFrame: CGRect, side: Command) -> CGRect {
         let leftWidth = floor(visibleFrame.width / 2)
         switch side {
@@ -45,11 +55,72 @@ enum WindowSnap {
                 width: visibleFrame.width - leftWidth,
                 height: visibleFrame.height
             )
+        case .top, .bottom:
+            return verticalHalfFrame(of: visibleFrame, side: side)
+        case .firstThird, .lastTwoThirds:
+            return thirdFrame(of: visibleFrame, side: side)
         case .maximize:
             return visibleFrame
         case .reasonableSize:
             return reasonableSizeFrame(of: visibleFrame)
         }
+    }
+
+    /// Full-width top / bottom half. Odd pixel goes to the bottom half.
+    nonisolated static func verticalHalfFrame(of visibleFrame: CGRect, side: Command) -> CGRect {
+        let topHeight = floor(visibleFrame.height / 2)
+        switch side {
+        case .top:
+            return CGRect(
+                x: visibleFrame.minX,
+                y: visibleFrame.minY,
+                width: visibleFrame.width,
+                height: topHeight
+            )
+        case .bottom:
+            return CGRect(
+                x: visibleFrame.minX,
+                y: visibleFrame.minY + topHeight,
+                width: visibleFrame.width,
+                height: visibleFrame.height - topHeight
+            )
+        default:
+            return visibleFrame
+        }
+    }
+
+    /// Leading third or trailing two-thirds column (Tinycast fractions + edge rounding).
+    nonisolated static func thirdFrame(of visibleFrame: CGRect, side: Command) -> CGRect {
+        switch side {
+        case .firstThird:
+            return tile(visibleFrame, x0: 0, x1: oneThird, y0: 0, y1: 1)
+        case .lastTwoThirds:
+            return tile(visibleFrame, x0: oneThird, x1: 1, y0: 0, y1: 1)
+        default:
+            return visibleFrame
+        }
+    }
+
+    /// Tinycast tile from fractional bounds of `visible` (gap = 0).
+    nonisolated static func tile(
+        _ visible: CGRect,
+        x0: CGFloat,
+        x1: CGFloat,
+        y0: CGFloat,
+        y1: CGFloat
+    ) -> CGRect {
+        let left = visible.minX + x0 * visible.width
+        let right = visible.minX + x1 * visible.width
+        let top = visible.minY + y0 * visible.height
+        let bottom = visible.minY + y1 * visible.height
+        return rounded(
+            CGRect(
+                x: left,
+                y: top,
+                width: max(0, right - left),
+                height: max(0, bottom - top)
+            )
+        )
     }
 
     /// Tinycast reasonable size: `min(canvas * 0.6, 1025×900)`, centered, edges rounded.
@@ -86,6 +157,10 @@ enum WindowSnap {
         switch command {
         case .left, .right:
             return halfFrame(of: visibleFrame, side: command)
+        case .top, .bottom:
+            return verticalHalfFrame(of: visibleFrame, side: command)
+        case .firstThird, .lastTwoThirds:
+            return thirdFrame(of: visibleFrame, side: command)
         case .maximize:
             return visibleFrame
         case .reasonableSize:

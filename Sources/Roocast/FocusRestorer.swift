@@ -86,18 +86,28 @@ enum FocusRestorer {
     /// Opens System Settings → Privacy → Accessibility (Tinycast `Permissions.openAccessibilitySettings`).
     @MainActor
     static func openAccessibilitySettings() {
-        let candidates = [
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
-            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility",
+        openPrivacyPane(
+            anchors: ["Privacy_Accessibility"],
+            label: "Accessibility"
+        )
+    }
+
+    @MainActor
+    private static func openPrivacyPane(anchors: [String], label: String) {
+        let bases = [
+            "x-apple.systempreferences:com.apple.preference.security?",
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?",
         ]
-        for string in candidates {
-            guard let url = URL(string: string) else { continue }
-            if NSWorkspace.shared.open(url) {
-                log("opened Accessibility settings")
-                return
+        for base in bases {
+            for anchor in anchors {
+                guard let url = URL(string: base + anchor) else { continue }
+                if NSWorkspace.shared.open(url) {
+                    log("opened \(label) settings")
+                    return
+                }
             }
         }
-        log("failed to open Accessibility settings")
+        log("failed to open \(label) settings")
     }
 
     static func capture(pid: pid_t) -> Snapshot {

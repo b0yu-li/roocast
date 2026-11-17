@@ -59,6 +59,61 @@ final class WindowSnapTests: XCTestCase {
         )
     }
 
+    func testVerticalHalfFrameSplitsEvenHeight() {
+        let visible = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let top = WindowSnap.verticalHalfFrame(of: visible, side: .top)
+        let bottom = WindowSnap.verticalHalfFrame(of: visible, side: .bottom)
+
+        XCTAssertEqual(top, CGRect(x: 0, y: 0, width: 1440, height: 450))
+        XCTAssertEqual(bottom, CGRect(x: 0, y: 450, width: 1440, height: 450))
+        XCTAssertEqual(top.maxY, bottom.minY)
+        XCTAssertEqual(top.height + bottom.height, visible.height)
+    }
+
+    func testVerticalHalfFrameOddPixelGoesBottom() {
+        let visible = CGRect(x: 10, y: 20, width: 800, height: 501)
+        let top = WindowSnap.verticalHalfFrame(of: visible, side: .top)
+        let bottom = WindowSnap.verticalHalfFrame(of: visible, side: .bottom)
+
+        XCTAssertEqual(top.height, 250)
+        XCTAssertEqual(bottom.height, 251)
+        XCTAssertEqual(top.height + bottom.height, visible.height)
+        XCTAssertEqual(top.maxY, bottom.minY)
+        XCTAssertEqual(top.width, visible.width)
+        XCTAssertEqual(bottom.width, visible.width)
+    }
+
+    func testThirdFramesPartitionVisible() {
+        // Tinycast reference display: evenly divisible by thirds.
+        let visible = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let first = WindowSnap.thirdFrame(of: visible, side: .firstThird)
+        let lastTwo = WindowSnap.thirdFrame(of: visible, side: .lastTwoThirds)
+
+        XCTAssertEqual(first, CGRect(x: 0, y: 0, width: 480, height: 900))
+        XCTAssertEqual(lastTwo, CGRect(x: 480, y: 0, width: 960, height: 900))
+        XCTAssertEqual(first.maxX, lastTwo.minX)
+        XCTAssertEqual(first.union(lastTwo), visible)
+        XCTAssertEqual(
+            WindowSnap.targetFrame(of: visible, command: .firstThird),
+            first
+        )
+        XCTAssertEqual(
+            WindowSnap.targetFrame(of: visible, command: .lastTwoThirds),
+            lastTwo
+        )
+    }
+
+    func testThirdFramesShareEdgeOnOddWidth() {
+        // Shared boundary must round identically so the columns still abut.
+        for width in [1001, 1441, 1920] as [CGFloat] {
+            let visible = CGRect(x: 0, y: 0, width: width, height: 900)
+            let first = WindowSnap.thirdFrame(of: visible, side: .firstThird)
+            let lastTwo = WindowSnap.thirdFrame(of: visible, side: .lastTwoThirds)
+            XCTAssertEqual(first.maxX, lastTwo.minX, "width \(width)")
+            XCTAssertEqual(first.union(lastTwo), visible, "width \(width)")
+        }
+    }
+
     func testReasonableSizeIsSixtyPercentCenteredCapped() {
         // Typical laptop visible frame — 60% fits under the 1025×900 cap.
         let visible = CGRect(x: 0, y: 40, width: 1440, height: 860)
@@ -90,6 +145,18 @@ final class WindowSnapTests: XCTestCase {
         XCTAssertEqual(AppItem.leftHalf.name, "Left Half")
         XCTAssertEqual(AppItem.rightHalf.kind, .rightHalf)
         XCTAssertEqual(AppItem.rightHalf.name, "Right Half")
+        XCTAssertEqual(AppItem.topHalf.kind, .topHalf)
+        XCTAssertEqual(AppItem.topHalf.name, "Top Half")
+        XCTAssertTrue(AppItem.topHalf.aliases.contains("th"))
+        XCTAssertEqual(AppItem.bottomHalf.kind, .bottomHalf)
+        XCTAssertEqual(AppItem.bottomHalf.name, "Bottom Half")
+        XCTAssertTrue(AppItem.bottomHalf.aliases.contains("bh"))
+        XCTAssertEqual(AppItem.firstThird.kind, .firstThird)
+        XCTAssertEqual(AppItem.firstThird.name, "First Third")
+        XCTAssertTrue(AppItem.firstThird.aliases.contains("ft"))
+        XCTAssertEqual(AppItem.lastTwoThirds.kind, .lastTwoThirds)
+        XCTAssertEqual(AppItem.lastTwoThirds.name, "Last Two Thirds")
+        XCTAssertTrue(AppItem.lastTwoThirds.aliases.contains("ltt"))
         XCTAssertEqual(AppItem.maximize.kind, .maximize)
         XCTAssertEqual(AppItem.maximize.name, "Maximize")
         XCTAssertTrue(AppItem.maximize.aliases.contains("max"))

@@ -114,6 +114,23 @@ final class AppSearchTests: XCTestCase {
         XCTAssertEqual(AppSearch.results(query: "rs", apps: []).first?.kind, .reasonableSize)
     }
 
+    func testResultsPutsTopAndBottomHalfFirst() {
+        XCTAssertEqual(AppSearch.results(query: "top", apps: []).first?.kind, .topHalf)
+        XCTAssertEqual(AppSearch.results(query: "th", apps: []).first?.kind, .topHalf)
+        XCTAssertEqual(AppSearch.results(query: "bottom", apps: []).first?.kind, .bottomHalf)
+        XCTAssertEqual(AppSearch.results(query: "bh", apps: []).first?.kind, .bottomHalf)
+    }
+
+    func testResultsPutsThirdCommandsFirst() {
+        XCTAssertEqual(AppSearch.results(query: "first third", apps: []).first?.kind, .firstThird)
+        XCTAssertEqual(AppSearch.results(query: "ft", apps: []).first?.kind, .firstThird)
+        XCTAssertEqual(
+            AppSearch.results(query: "last two thirds", apps: []).first?.kind,
+            .lastTwoThirds
+        )
+        XCTAssertEqual(AppSearch.results(query: "ltt", apps: []).first?.kind, .lastTwoThirds)
+    }
+
     func testResultsEmptyQueryShowsRunningSwitchSuggestions() {
         let apps = [
             AppItem.stub(name: "Notes", path: "/Applications/Notes.app", isRunning: false),

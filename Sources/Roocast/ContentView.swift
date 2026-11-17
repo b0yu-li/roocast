@@ -194,6 +194,30 @@ struct ContentView: View {
             return
         }
 
+        if app.kind == .topHalf {
+            query = ""
+            onWindowSnap?(.top)
+            return
+        }
+
+        if app.kind == .bottomHalf {
+            query = ""
+            onWindowSnap?(.bottom)
+            return
+        }
+
+        if app.kind == .firstThird {
+            query = ""
+            onWindowSnap?(.firstThird)
+            return
+        }
+
+        if app.kind == .lastTwoThirds {
+            query = ""
+            onWindowSnap?(.lastTwoThirds)
+            return
+        }
+
         if app.kind == .folder {
             NSWorkspace.shared.open(URL(fileURLWithPath: app.path, isDirectory: true))
             query = ""
