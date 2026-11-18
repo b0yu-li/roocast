@@ -8,6 +8,8 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Roocast",
+            // AppIcon.png/.icns are copied into the .app by dev-install.sh — not SPM resources.
+            exclude: ["Resources"],
             linkerSettings: [
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
             ]

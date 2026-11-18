@@ -67,6 +67,12 @@ mkdir -p "${BUILD_DIR}/${BUNDLE_NAME}/Contents/Resources"
 
 cp "${BUILD_DIR}/${APP_NAME}" "${BUILD_DIR}/${BUNDLE_NAME}/Contents/MacOS/${APP_NAME}"
 
+# App icon (Exp-Z family mark — regenerate via Scripts/generate_app_icon.py --install)
+ICNS_SRC="Sources/Roocast/Resources/AppIcon.icns"
+if [ -f "${ICNS_SRC}" ]; then
+    cp "${ICNS_SRC}" "${BUILD_DIR}/${BUNDLE_NAME}/Contents/Resources/AppIcon.icns"
+fi
+
 # Keep Info.plist version in sync with Sources/Roocast/Version.swift
 VERSION=$(python3 - <<'PY'
 import re, pathlib
@@ -95,6 +101,8 @@ cat > "${BUILD_DIR}/${BUNDLE_NAME}/Contents/Info.plist" << EOF
     <string>${VERSION}</string>
     <key>CFBundleVersion</key>
     <string>1</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>LSUIElement</key>

@@ -14,3 +14,11 @@ DerivedData/
 
 # Local task backlog (session notes, future work) — never commit
 /.backlog/
+
+# Icon generator venv (Pillow/numpy)
+/.venv/
+
+# Icon iteration probes — keep locked.png / locked-masked.png / LOCKED.md
+/Scripts/icon/iter-*.png
+/Scripts/icon/probe-*.png
+
