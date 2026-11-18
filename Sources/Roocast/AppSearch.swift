@@ -84,6 +84,42 @@ enum AppSearch {
         )
     }
 
+    /// Matches as the user types toward "move to top" / "move top" / alias "mtt".
+    nonisolated static func matchesMoveToTopCommand(_ query: String) -> Bool {
+        matchesWindowSnapCommand(
+            query,
+            phrases: ["move to top", "move top"],
+            aliases: ["mtt"]
+        )
+    }
+
+    /// Matches as the user types toward "move to bottom" / "move bottom" / alias "mtb".
+    nonisolated static func matchesMoveToBottomCommand(_ query: String) -> Bool {
+        matchesWindowSnapCommand(
+            query,
+            phrases: ["move to bottom", "move bottom"],
+            aliases: ["mtb"]
+        )
+    }
+
+    /// Matches as the user types toward "move to left" / "move left" / alias "mtl".
+    nonisolated static func matchesMoveToLeftCommand(_ query: String) -> Bool {
+        matchesWindowSnapCommand(
+            query,
+            phrases: ["move to left", "move left"],
+            aliases: ["mtl"]
+        )
+    }
+
+    /// Matches as the user types toward "move to right" / "move right" / alias "mtr".
+    nonisolated static func matchesMoveToRightCommand(_ query: String) -> Bool {
+        matchesWindowSnapCommand(
+            query,
+            phrases: ["move to right", "move right"],
+            aliases: ["mtr"]
+        )
+    }
+
     /// Prefix match on display phrases, or exact alias (e.g. `lh`).
     nonisolated private static func matchesBuiltInCommand(
         _ query: String,
@@ -160,6 +196,18 @@ enum AppSearch {
         }
         if matchesLastTwoThirdsCommand(lowered) {
             output.append(.lastTwoThirds)
+        }
+        if matchesMoveToTopCommand(lowered) {
+            output.append(.moveToTop)
+        }
+        if matchesMoveToBottomCommand(lowered) {
+            output.append(.moveToBottom)
+        }
+        if matchesMoveToLeftCommand(lowered) {
+            output.append(.moveToLeft)
+        }
+        if matchesMoveToRightCommand(lowered) {
+            output.append(.moveToRight)
         }
         output.append(contentsOf: rank(query: lowered, apps: apps + folderItems))
         return output

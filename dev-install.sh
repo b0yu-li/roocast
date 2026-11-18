@@ -118,27 +118,60 @@ fi
 
 # Sign with a *stable* identity. TCC (Privacy → Accessibility) anchors to the
 # designated requirement: adhoc → CDHash (changes every build → grant churn),
-# a certificate → anchored to the cert (grant survives rebuilds).
-# Explicit override: ROOCAST_SIGN_IDENTITY="Apple Development: Name (ID)" ./dev-install.sh
-# (Apple Development keys in the Data-Protection keychain are invisible to
-# find-identity, so they are opt-in rather than auto-picked; note the cert
-# expires yearly, which would churn the Accessibility grant on renewal.)
-# Default preference: any valid codesigning identity (e.g. a self-signed
-# cert — stable and long-lived) → adhoc fallback.
-IDENTITY="${ROOCAST_SIGN_IDENTITY:-}"
-if [ -z "${IDENTITY}" ]; then
-    IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '$0 ~ /^[[:space:]]*[0-9]+\)/ && /"/{print $2; exit}')"
-fi
-IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development/{print $2; exit}')"
-if [ -z "${IDENTITY}" ]; then
-    IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '$0 ~ /^[[:space:]]*[0-9]+\)/ && /"/{print $2; exit}')"
+# a certificate → anchored to the cert leaf CN (grant survives rebuilds).
+#
+# Prefer the identity's SHA-1 hash over its common name: duplicate
+# "Apple Development: …" certs make name-based codesign fail with
+# "ambiguous (matches … and …)".
+#
+# Override: ROOCAST_SIGN_IDENTITY="<hash-or-name>" ./dev-install.sh
+# Note: Apple Development certs expire yearly — renewing can churn the grant.
+pick_codesign_identity() {
+    if [ -n "${ROOCAST_SIGN_IDENTITY:-}" ]; then
+        printf '%s\n' "${ROOCAST_SIGN_IDENTITY}"
+        return
+    fi
+    local identities
+    identities="$(security find-identity -v -p codesigning 2>/dev/null || true)"
+    # Prefer Apple Development (stable Team ID / leaf CN for Accessibility).
+    # Use the SHA-1 hash column — duplicate CNs make name-based codesign ambiguous.
+    local hash
+    hash="$(printf '%s\n' "${identities}" | awk '
+        /Apple Development/ {
+            for (i = 1; i <= NF; i++) {
+                if ($i ~ /^[A-F0-9]{40}$/) { print $i; exit }
+            }
+        }
+    ')"
+    if [ -n "${hash}" ]; then
+        printf '%s\n' "${hash}"
+        return
+    fi
+    # Any other valid identity hash.
+    hash="$(printf '%s\n' "${identities}" | awk '
+        /^[[:space:]]*[0-9]+\)/ {
+            for (i = 1; i <= NF; i++) {
+                if ($i ~ /^[A-F0-9]{40}$/) { print $i; exit }
+            }
+        }
+    ')"
+    printf '%s\n' "${hash}"
+}
+
+IDENTITY="$(pick_codesign_identity)"
+IDENTITY_LABEL=""
+if [ -n "${IDENTITY}" ]; then
+    IDENTITY_LABEL="$(security find-identity -v -p codesigning 2>/dev/null \
+        | awk -v id="${IDENTITY}" 'index($0, id) { if (match($0, /"[^"]+"/)) print substr($0, RSTART+1, RLENGTH-2); exit }')"
 fi
 
 if [ -n "${IDENTITY}" ]; then
-    if codesign --force --deep --sign "${IDENTITY}" --identifier "com.roocast.app" "${INSTALL_PATH}" 2>/dev/null; then
-        echo "   Signed with stable identity \"${IDENTITY}\" — Accessibility grant survives rebuilds"
+    if codesign --force --deep --sign "${IDENTITY}" --identifier "com.roocast.app" "${INSTALL_PATH}"; then
+        echo "   Signed with stable identity ${IDENTITY_LABEL:-$IDENTITY}"
+        echo "   Accessibility grant survives rebuilds (one re-grant needed after switching off adhoc)."
+        codesign -dv --verbose=2 "${INSTALL_PATH}" 2>&1 | awk '/Authority=|TeamIdentifier=/{print "   "$0}'
     else
-        echo "   ⚠️  Signing with \"${IDENTITY}\" failed — falling back to adhoc." >&2
+        echo "   ⚠️  Signing with ${IDENTITY_LABEL:-$IDENTITY} failed — falling back to adhoc." >&2
         codesign --force --deep --sign - --identifier "com.roocast.app" "${INSTALL_PATH}" 2>/dev/null || true
     fi
 else

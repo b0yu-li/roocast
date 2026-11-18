@@ -114,6 +114,52 @@ final class WindowSnapTests: XCTestCase {
         }
     }
 
+    func testMoveToTopAndBottomHoldX() {
+        let visible = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let current = CGRect(x: 200, y: 300, width: 400, height: 250)
+
+        let top = WindowSnap.moveFrame(of: visible, current: current, command: .moveToTop)
+        let bottom = WindowSnap.moveFrame(of: visible, current: current, command: .moveToBottom)
+
+        XCTAssertEqual(top, CGRect(x: 200, y: 0, width: 400, height: 250))
+        XCTAssertEqual(bottom, CGRect(x: 200, y: 650, width: 400, height: 250))
+        XCTAssertEqual(top.width, current.width)
+        XCTAssertEqual(top.height, current.height)
+        XCTAssertEqual(top.minX, current.minX)
+        XCTAssertEqual(bottom.minX, current.minX)
+        XCTAssertFalse(WindowSnap.Command.moveToTop.resizes)
+        XCTAssertEqual(
+            WindowSnap.targetFrame(of: visible, command: .moveToTop, current: current),
+            top
+        )
+    }
+
+    func testMoveToLeftAndRightHoldY() {
+        let visible = CGRect(x: 0, y: 40, width: 1440, height: 860)
+        let current = CGRect(x: 500, y: 200, width: 320, height: 180)
+
+        let left = WindowSnap.moveFrame(of: visible, current: current, command: .moveToLeft)
+        let right = WindowSnap.moveFrame(of: visible, current: current, command: .moveToRight)
+
+        XCTAssertEqual(left, CGRect(x: 0, y: 200, width: 320, height: 180))
+        XCTAssertEqual(right, CGRect(x: 1120, y: 200, width: 320, height: 180))
+        XCTAssertEqual(left.minY, current.minY)
+        XCTAssertEqual(right.minY, current.minY)
+        XCTAssertEqual(left.size, current.size)
+        XCTAssertEqual(right.size, current.size)
+    }
+
+    func testMoveToClampsHeldAxisOntoVisible() {
+        // Window partly off-display: flushing top must also pull X back in.
+        let visible = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let current = CGRect(x: -80, y: 400, width: 400, height: 250)
+        let top = WindowSnap.moveFrame(of: visible, current: current, command: .moveToTop)
+
+        XCTAssertEqual(top.minX, 0)
+        XCTAssertEqual(top.minY, 0)
+        XCTAssertEqual(top.size, current.size)
+    }
+
     func testReasonableSizeIsSixtyPercentCenteredCapped() {
         // Typical laptop visible frame — 60% fits under the 1025×900 cap.
         let visible = CGRect(x: 0, y: 40, width: 1440, height: 860)
@@ -157,6 +203,15 @@ final class WindowSnapTests: XCTestCase {
         XCTAssertEqual(AppItem.lastTwoThirds.kind, .lastTwoThirds)
         XCTAssertEqual(AppItem.lastTwoThirds.name, "Last Two Thirds")
         XCTAssertTrue(AppItem.lastTwoThirds.aliases.contains("ltt"))
+        XCTAssertEqual(AppItem.moveToTop.kind, .moveToTop)
+        XCTAssertEqual(AppItem.moveToTop.name, "Move to Top")
+        XCTAssertTrue(AppItem.moveToTop.aliases.contains("mtt"))
+        XCTAssertEqual(AppItem.moveToBottom.kind, .moveToBottom)
+        XCTAssertEqual(AppItem.moveToBottom.name, "Move to Bottom")
+        XCTAssertEqual(AppItem.moveToLeft.kind, .moveToLeft)
+        XCTAssertEqual(AppItem.moveToLeft.name, "Move to Left")
+        XCTAssertEqual(AppItem.moveToRight.kind, .moveToRight)
+        XCTAssertEqual(AppItem.moveToRight.name, "Move to Right")
         XCTAssertEqual(AppItem.maximize.kind, .maximize)
         XCTAssertEqual(AppItem.maximize.name, "Maximize")
         XCTAssertTrue(AppItem.maximize.aliases.contains("max"))

@@ -1,16 +1,17 @@
 import AppKit
 import ApplicationServices
 
-/// Built-in window snap: halves, thirds, maximize, or reasonable size.
+/// Built-in window snap: halves, thirds, edge moves, maximize, or reasonable size.
 ///
 /// Maximize fills `NSScreen.visibleFrame` (menu bar / Dock stay) — never toggles
 /// macOS `AXFullScreen` (which would create a new Space).
 /// Reasonable Size mirrors Tinycast: ~60% of the visible frame, capped, centered.
-/// Thirds / top / bottom use Tinycast fractional tiles with edge rounding.
+/// Thirds / top / bottom halves use Tinycast fractional tiles with edge rounding.
+/// Move-to commands keep size and flush to one edge (hold the other axis).
 ///
 /// Mirrors Tinycast's AX path (`AXGeometry` + `AXWindowAccess.write`):
 /// work in Accessibility top-left coordinates, resolve the target window on the
-/// remembered app, then apply size → position → size.
+/// remembered app, then apply size → position → size (or position-only for moves).
 enum WindowSnap {
     enum Command: Hashable {
         case left
@@ -23,10 +24,28 @@ enum WindowSnap {
         case firstThird
         /// Trailing two-thirds column (sets X and Y to the tile).
         case lastTwoThirds
+        /// Keep size; flush to the top edge (hold X).
+        case moveToTop
+        /// Keep size; flush to the bottom edge (hold X).
+        case moveToBottom
+        /// Keep size; flush to the left edge (hold Y).
+        case moveToLeft
+        /// Keep size; flush to the right edge (hold Y).
+        case moveToRight
         /// Fill the display's visible frame (current Space). Not macOS fullscreen.
         case maximize
         /// ~60% of visible frame, capped at 1025×900, centered (Tinycast).
         case reasonableSize
+
+        /// Move-to commands only write position.
+        var resizes: Bool {
+            switch self {
+            case .moveToTop, .moveToBottom, .moveToLeft, .moveToRight:
+                return false
+            default:
+                return true
+            }
+        }
     }
 
     /// Tinycast `reasonableSizeFraction` — fraction of the visible canvas.
@@ -59,6 +78,9 @@ enum WindowSnap {
             return verticalHalfFrame(of: visibleFrame, side: side)
         case .firstThird, .lastTwoThirds:
             return thirdFrame(of: visibleFrame, side: side)
+        case .moveToTop, .moveToBottom, .moveToLeft, .moveToRight:
+            // Needs the current window frame — callers should use `targetFrame`.
+            return visibleFrame
         case .maximize:
             return visibleFrame
         case .reasonableSize:
@@ -152,8 +174,43 @@ enum WindowSnap {
         )
     }
 
+    /// Keeps `frame` inside `box` unresized; an oversized window pins its leading edge.
+    nonisolated static func clamped(_ frame: CGRect, into box: CGRect) -> CGRect {
+        let x = min(max(frame.minX, box.minX), max(box.minX, box.maxX - frame.width))
+        let y = min(max(frame.minY, box.minY), max(box.minY, box.maxY - frame.height))
+        return CGRect(x: x, y: y, width: frame.width, height: frame.height)
+    }
+
+    /// Flush `current` to one edge of `visibleFrame`, keeping size (Tinycast clamp).
+    /// Top/bottom hold X; left/right hold Y. Off-display axes are pulled back in.
+    nonisolated static func moveFrame(
+        of visibleFrame: CGRect,
+        current: CGRect,
+        command: Command
+    ) -> CGRect {
+        var frame = current
+        switch command {
+        case .moveToTop:
+            frame.origin.y = visibleFrame.minY
+        case .moveToBottom:
+            frame.origin.y = visibleFrame.maxY - frame.height
+        case .moveToLeft:
+            frame.origin.x = visibleFrame.minX
+        case .moveToRight:
+            frame.origin.x = visibleFrame.maxX - frame.width
+        default:
+            return current
+        }
+        return rounded(clamped(frame, into: visibleFrame))
+    }
+
     /// Target frame in the same coordinate space as `visibleFrame`.
-    nonisolated static func targetFrame(of visibleFrame: CGRect, command: Command) -> CGRect {
+    /// Pass `current` for move-to commands (size-preserving edge flush).
+    nonisolated static func targetFrame(
+        of visibleFrame: CGRect,
+        command: Command,
+        current: CGRect = .null
+    ) -> CGRect {
         switch command {
         case .left, .right:
             return halfFrame(of: visibleFrame, side: command)
@@ -161,6 +218,8 @@ enum WindowSnap {
             return verticalHalfFrame(of: visibleFrame, side: command)
         case .firstThird, .lastTwoThirds:
             return thirdFrame(of: visibleFrame, side: command)
+        case .moveToTop, .moveToBottom, .moveToLeft, .moveToRight:
+            return moveFrame(of: visibleFrame, current: current, command: command)
         case .maximize:
             return visibleFrame
         case .reasonableSize:
@@ -231,7 +290,7 @@ enum WindowSnap {
 
         // Tinycast: convert visibleFrame into AX space, then place there.
         let axVisible = flip(screen.visibleFrame, primaryScreenHeight: primaryHeight)
-        let target = targetFrame(of: axVisible, command: command)
+        let target = targetFrame(of: axVisible, command: command, current: currentAX)
 
         var settable = DarwinBoolean(false)
         let canResize =
@@ -241,7 +300,7 @@ enum WindowSnap {
         let restoreEnhancedUI = suppressEnhancedUserInterface(on: application)
         defer { restoreEnhancedUI() }
 
-        guard write(target, to: window, canResize: canResize) else {
+        guard write(target, to: window, canResize: canResize && command.resizes) else {
             FocusRestorer.log(
                 "windowSnap: write failed \(command) app=\(app.localizedName ?? "?") target=\(target)"
             )
@@ -249,7 +308,7 @@ enum WindowSnap {
         }
 
         FocusRestorer.log(
-            "windowSnap: \(command) app=\(app.localizedName ?? "?") target=\(target) canResize=\(canResize)"
+            "windowSnap: \(command) app=\(app.localizedName ?? "?") target=\(target) canResize=\(canResize) resizes=\(command.resizes)"
         )
 
         // Tinycast `AXWindowAccess.focus`: raise + frontmost + activate.

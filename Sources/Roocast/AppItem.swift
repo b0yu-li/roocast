@@ -11,6 +11,10 @@ struct AppItem: Identifiable, Hashable {
         case bottomHalf
         case firstThird
         case lastTwoThirds
+        case moveToTop
+        case moveToBottom
+        case moveToLeft
+        case moveToRight
         case maximize
         case reasonableSize
         /// Lead calculator row — Enter copies `copyText`.
@@ -258,6 +262,82 @@ struct AppItem: Identifiable, Hashable {
             profile: nil,
             aliases: ["ltt"],
             kind: .lastTwoThirds
+        )
+    }()
+
+    /// Built-in command: keep size, flush the prior focused window to the top edge.
+    static let moveToTop: AppItem = {
+        let icon = NSImage(
+            systemSymbolName: "arrow.up.to.line",
+            accessibilityDescription: "Move to Top"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: UUID(uuidString: "D0E1F2A3-B4C5-6789-3456-890123456789")!,
+            name: "Move to Top",
+            path: "Command",
+            icon: icon,
+            isRunning: false,
+            profile: nil,
+            aliases: ["mtt"],
+            kind: .moveToTop
+        )
+    }()
+
+    /// Built-in command: keep size, flush the prior focused window to the bottom edge.
+    static let moveToBottom: AppItem = {
+        let icon = NSImage(
+            systemSymbolName: "arrow.down.to.line",
+            accessibilityDescription: "Move to Bottom"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: UUID(uuidString: "E1F2A3B4-C5D6-7890-4567-901234567890")!,
+            name: "Move to Bottom",
+            path: "Command",
+            icon: icon,
+            isRunning: false,
+            profile: nil,
+            aliases: ["mtb"],
+            kind: .moveToBottom
+        )
+    }()
+
+    /// Built-in command: keep size, flush the prior focused window to the left edge.
+    static let moveToLeft: AppItem = {
+        let icon = NSImage(
+            systemSymbolName: "arrow.left.to.line",
+            accessibilityDescription: "Move to Left"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: UUID(uuidString: "F2A3B4C5-D6E7-8901-5678-012345678901")!,
+            name: "Move to Left",
+            path: "Command",
+            icon: icon,
+            isRunning: false,
+            profile: nil,
+            aliases: ["mtl"],
+            kind: .moveToLeft
+        )
+    }()
+
+    /// Built-in command: keep size, flush the prior focused window to the right edge.
+    static let moveToRight: AppItem = {
+        let icon = NSImage(
+            systemSymbolName: "arrow.right.to.line",
+            accessibilityDescription: "Move to Right"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: UUID(uuidString: "A3B4C5D6-E7F8-9012-6789-123456789012")!,
+            name: "Move to Right",
+            path: "Command",
+            icon: icon,
+            isRunning: false,
+            profile: nil,
+            aliases: ["mtr"],
+            kind: .moveToRight
         )
     }()
 

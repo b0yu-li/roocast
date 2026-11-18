@@ -218,6 +218,30 @@ struct ContentView: View {
             return
         }
 
+        if app.kind == .moveToTop {
+            query = ""
+            onWindowSnap?(.moveToTop)
+            return
+        }
+
+        if app.kind == .moveToBottom {
+            query = ""
+            onWindowSnap?(.moveToBottom)
+            return
+        }
+
+        if app.kind == .moveToLeft {
+            query = ""
+            onWindowSnap?(.moveToLeft)
+            return
+        }
+
+        if app.kind == .moveToRight {
+            query = ""
+            onWindowSnap?(.moveToRight)
+            return
+        }
+
         if app.kind == .folder {
             NSWorkspace.shared.open(URL(fileURLWithPath: app.path, isDirectory: true))
             query = ""

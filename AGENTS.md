@@ -126,7 +126,7 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 - **Clipboard history** — ⌘Esc summons recent pasteboard items (global hotkey, same process).
 - **Calculator (math)** — type an expression (`2+2`, `sqrt(9)`, `10% of 50`); a lead result row appears; Enter copies the answer. Tinycast-inspired, math-only (no units/currency/history yet).
 - **Zoxide jump** — type `z <keywords>` (e.g. `z downloads`); best frecent match via the `zoxide` CLI opens in Finder on Enter. Requires `zoxide` on the Mac (Homebrew path resolved explicitly for GUI apps).
-- **Window snap (minimal)** — built-in commands for left / right / top / bottom half, first third / last two thirds, maximize (fill visible frame in the current Space — not macOS fullscreen) / reasonable size (~60% centered, Tinycast-style). Accessibility. Grow only with deliberate, small additions.
+- **Window snap (minimal)** — built-in commands for left / right / top / bottom half, first third / last two thirds, move to top / bottom / left / right (keep size, flush to edge), maximize (fill visible frame in the current Space — not macOS fullscreen) / reasonable size (~60% centered, Tinycast-style). Accessibility. Grow only with deliberate, small additions.
 - **Text expander (PoC)** — system-wide `$time` → `yyyy-MM-dd HH:mm` (Tinycast-style CGEvent tap). Accessibility. No snippet UI / marketplace yet.
 - **App toggle (hyper-like)** — Left Control + key chords from `~/.config/roocast/bindings.toml` show/hide a few apps (e.g. Left Control+T → Ghostty). Swallows the chord. Accessibility. Not a full Hyper key remapper.
 

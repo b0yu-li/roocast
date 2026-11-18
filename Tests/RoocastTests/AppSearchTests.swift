@@ -131,6 +131,25 @@ final class AppSearchTests: XCTestCase {
         XCTAssertEqual(AppSearch.results(query: "ltt", apps: []).first?.kind, .lastTwoThirds)
     }
 
+    func testResultsPutsMoveToCommandsFirst() {
+        XCTAssertEqual(AppSearch.results(query: "move to top", apps: []).first?.kind, .moveToTop)
+        XCTAssertEqual(AppSearch.results(query: "mtt", apps: []).first?.kind, .moveToTop)
+        XCTAssertEqual(
+            AppSearch.results(query: "move to bottom", apps: []).first?.kind,
+            .moveToBottom
+        )
+        XCTAssertEqual(AppSearch.results(query: "move left", apps: []).first?.kind, .moveToLeft)
+        XCTAssertEqual(AppSearch.results(query: "mtr", apps: []).first?.kind, .moveToRight)
+
+        let moveResults = AppSearch.results(query: "move", apps: [])
+        XCTAssertTrue(moveResults.contains { $0.kind == .moveToTop })
+        XCTAssertTrue(moveResults.contains { $0.kind == .moveToBottom })
+        XCTAssertTrue(moveResults.contains { $0.kind == .moveToLeft })
+        XCTAssertTrue(moveResults.contains { $0.kind == .moveToRight })
+        // Bare "top" still prefers Top Half, not Move to Top.
+        XCTAssertEqual(AppSearch.results(query: "top", apps: []).first?.kind, .topHalf)
+    }
+
     func testResultsEmptyQueryShowsRunningSwitchSuggestions() {
         let apps = [
             AppItem.stub(name: "Notes", path: "/Applications/Notes.app", isRunning: false),
