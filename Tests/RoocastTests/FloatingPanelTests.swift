@@ -18,8 +18,9 @@ final class FloatingPanelTests: XCTestCase {
     }
 
     func testClipboardLayoutIsCompact() {
-        XCTAssertEqual(ClipboardLayout.width, 560)
-        XCTAssertEqual(ClipboardLayout.height, 360)
+        XCTAssertEqual(ClipboardLayout.width, 680)
+        XCTAssertEqual(ClipboardLayout.listWidth, 290)
+        XCTAssertEqual(ClipboardLayout.height, 420)
         XCTAssertGreaterThan(ClipboardLayout.cornerRadius, 0)
     }
 

@@ -5,19 +5,57 @@ import Foundation
 import Security // Legacy .enc migration only
 
 struct ClipboardItem: Identifiable, Equatable, Codable {
+    enum Kind: String, Codable {
+        case text
+        case image
+    }
+
     let id: UUID
+    let kind: Kind
+    /// Plain text for `.text` rows; empty for `.image`.
     let text: String
+    /// Absolute path under the store's images dir for owned PNG blobs.
+    let imagePath: String?
     let createdAt: Date
+
+    init(
+        id: UUID = UUID(),
+        kind: Kind = .text,
+        text: String,
+        imagePath: String? = nil,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.kind = kind
+        self.text = text
+        self.imagePath = imagePath
+        self.createdAt = createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        text = try container.decode(String.self, forKey: .text)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        // pre-v0.11 JSON had only id/text/createdAt — treat as text.
+        kind = try container.decodeIfPresent(Kind.self, forKey: .kind) ?? .text
+        imagePath = try container.decodeIfPresent(String.self, forKey: .imagePath)
+    }
 
     /// Single-line preview suitable for list rows.
     var preview: String {
-        let collapsed = text
-            .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: "\t", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if collapsed.count <= 120 { return collapsed }
-        let end = collapsed.index(collapsed.startIndex, offsetBy: 120)
-        return String(collapsed[..<end]) + "…"
+        switch kind {
+        case .image:
+            return "Image"
+        case .text:
+            let collapsed = text
+                .replacingOccurrences(of: "\n", with: " ")
+                .replacingOccurrences(of: "\t", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if collapsed.count <= 120 { return collapsed }
+            let end = collapsed.index(collapsed.startIndex, offsetBy: 120)
+            return String(collapsed[..<end]) + "…"
+        }
     }
 
     /// When the entry was copied — today shows a clock time, older shows the
@@ -54,6 +92,12 @@ struct ClipboardItem: Identifiable, Equatable, Codable {
 /// (~every 2s). Pasteboard string reads and `@Published` updates hop to the
 /// main actor, so idle main-thread cost is near zero.
 ///
+/// **Images (v0.11):** Durable image *file URLs* (Finder) load from disk first —
+/// Finder's companion `.png`/`.tiff` is often a 1024² file-type icon. Bare
+/// inline `.png`/`.tiff` (Copy Image) still win over `.string`. TIFF→PNG + blob
+/// write run off the poll path; rows hold a path under Application Support
+/// `images/`. Soft-capped so a few 6K shots cannot dominate the 50 MB budget.
+///
 /// **At rest:** Plain JSON under Application Support. FileVault is the at-rest
 /// layer — the old AES-GCM/Keychain scheme only re-implemented what the
 /// platform already guarantees, and coupled history to a signing identity.
@@ -76,11 +120,13 @@ final class ClipboardStore: ObservableObject {
     @Published private(set) var items: [ClipboardItem] = []
 
     private let maxItems: Int
+    private let maxImages: Int
     private let maxTextLength: Int
     private let pollInterval: TimeInterval
     private let persistDebounce: TimeInterval
     /// `nil` disables disk I/O (useful in unit tests that only exercise filtering).
     private let storageURL: URL?
+    private let imagesDirectoryURL: URL?
 
     private var pollSource: DispatchSourceTimer?
     private let pollQueue = DispatchQueue(label: "com.roocast.clipboard.poll", qos: .utility)
@@ -94,6 +140,14 @@ final class ClipboardStore: ObservableObject {
             .appendingPathComponent(
                 "Library/Application Support/Roocast/clipboard-history.json",
                 isDirectory: false
+            )
+    }
+
+    nonisolated static var defaultImagesDirectoryURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(
+                "Library/Application Support/Roocast/images",
+                isDirectory: true
             )
     }
 
@@ -114,26 +168,36 @@ final class ClipboardStore: ObservableObject {
 
     /// - Parameters:
     ///   - storageURL: Explicit file URL. Ignored when `persistToDisk` is false.
+    ///   - imagesDirectoryURL: Owned PNG blob directory. Defaults beside JSON.
     ///   - persistToDisk: When true (default), writes JSON history to disk.
     ///   - pollInterval: Background changeCount check interval (default 2s — latency is fine).
     ///   - maxItems: History bound. 200 keeps several days of typical copying —
     ///     50 (the old cap) evicted anything older within a day (per focus.log).
+    ///   - maxImages: Soft cap on owned image rows (default 30) for the memory budget.
     init(
         maxItems: Int = 200,
+        maxImages: Int = 30,
         maxTextLength: Int = 100_000,
         pollInterval: TimeInterval = 2.0,
         persistDebounce: TimeInterval = 0.5,
         storageURL: URL? = nil,
+        imagesDirectoryURL: URL? = nil,
         persistToDisk: Bool = true
     ) {
         self.maxItems = max(1, maxItems)
+        self.maxImages = max(1, maxImages)
         self.maxTextLength = max(1, maxTextLength)
         self.pollInterval = max(0.5, pollInterval)
         self.persistDebounce = persistDebounce
         if persistToDisk {
-            self.storageURL = storageURL ?? Self.defaultStorageURL
+            let jsonURL = storageURL ?? Self.defaultStorageURL
+            self.storageURL = jsonURL
+            self.imagesDirectoryURL = imagesDirectoryURL
+                ?? jsonURL.deletingLastPathComponent().appendingPathComponent("images", isDirectory: true)
         } else {
             self.storageURL = nil
+            // Tests may still pass an images dir to exercise blob ownership.
+            self.imagesDirectoryURL = imagesDirectoryURL
         }
     }
 
@@ -164,7 +228,7 @@ final class ClipboardStore: ObservableObject {
 
         let path = storageURL?.path ?? "(memory-only)"
         FocusRestorer.log(
-            "clipboard: monitoring started (interval=\(pollInterval)s bg, max=\(maxItems), store=\(path))"
+            "clipboard: monitoring started (interval=\(pollInterval)s bg, max=\(maxItems), images≤\(maxImages), store=\(path))"
         )
     }
 
@@ -177,43 +241,83 @@ final class ClipboardStore: ObservableObject {
         persistNow()
     }
 
-    /// Writes text to the general pasteboard without re-recording it in history.
-    /// Self-writes are stamped with `internalType` so the poll can identify them
-    /// by content, not by a changeCount flag (which races with foreign copies).
-    func copyToPasteboard(_ text: String) {
+    /// Absolute URL for an owned image blob, if the row still points at one on disk.
+    func imageURL(for item: ClipboardItem) -> URL? {
+        guard item.kind == .image, let path = item.imagePath, !path.isEmpty else { return nil }
+        let url = URL(fileURLWithPath: path)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return url
+    }
+
+    /// Writes an item back to the general pasteboard without re-recording it.
+    /// Images: PNG + fileURL + marker — never `.string` (Tinycast: rich text would prefer path).
+    func copyToPasteboard(_ item: ClipboardItem) {
         let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.declareTypes([.string, Self.internalType], owner: nil)
-        pb.setString(text, forType: .string)
-        pb.setData(Data(), forType: Self.internalType)
-        // Load-bearing: a mismatched count means a foreign write the next poll
-        // must still see — only sync when the pasteboard is still ours.
+        switch item.kind {
+        case .text:
+            pb.clearContents()
+            pb.declareTypes([.string, Self.internalType], owner: nil)
+            pb.setString(item.text, forType: .string)
+            pb.setData(Data(), forType: Self.internalType)
+            FocusRestorer.log("clipboard: wrote \(item.text.count) chars to pasteboard")
+        case .image:
+            guard let url = imageURL(for: item),
+                  let data = try? Data(contentsOf: url, options: .mappedIfSafe)
+            else {
+                FocusRestorer.log("clipboard: image paste failed — missing blob")
+                return
+            }
+            pb.clearContents()
+            pb.declareTypes([.png, .fileURL, Self.internalType], owner: nil)
+            pb.setData(data, forType: .png)
+            pb.setData(url.dataRepresentation, forType: .fileURL)
+            pb.setData(Data(), forType: Self.internalType)
+            FocusRestorer.log("clipboard: wrote image (\(data.count) bytes) to pasteboard")
+        }
         let count = pb.changeCount
         if NSPasteboard.general.changeCount == count {
             lastChangeCount = count
         }
-        // Re-recency: pasting from history moves the row back to the top.
-        promote(text: text)
-        FocusRestorer.log("clipboard: wrote \(text.count) chars to pasteboard (changeCount=\(count))")
+        promote(item)
+    }
+
+    /// Convenience for text-only callers / tests.
+    func copyToPasteboard(_ text: String) {
+        copyToPasteboard(ClipboardItem(kind: .text, text: text))
     }
 
     /// Case-insensitive substring filter; empty query returns full history (newest first).
+    /// Images match the label "Image" only (no OCR).
     func items(matching query: String) -> [ClipboardItem] {
         let lowered = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !lowered.isEmpty else { return items }
-        return items.filter { $0.text.lowercased().contains(lowered) }
+        return items.filter { item in
+            switch item.kind {
+            case .image:
+                return item.preview.lowercased().contains(lowered)
+            case .text:
+                return item.text.lowercased().contains(lowered)
+            }
+        }
     }
 
     /// Test / PoC helper — insert without touching the system pasteboard.
     func prependForTesting(_ text: String) {
-        insertItem(text: text, persist: true)
+        insertText(text, persist: true)
+    }
+
+    /// Test helper — write a PNG into the images dir and insert an image row.
+    @discardableResult
+    func prependImageForTesting(_ pngData: Data) -> ClipboardItem? {
+        insertImage(pngData: pngData, persist: true)
     }
 
     /// Delete one entry (tinycast's "Delete Entry") and persist immediately —
     /// a deliberate action must not ride the insert debounce.
     func remove(_ item: ClipboardItem) {
         guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
-        items.remove(at: index)
+        let removed = items.remove(at: index)
+        deleteOwnedImage(removed)
         persistNow()
         FocusRestorer.log("clipboard: removed item (history=\(items.count))")
     }
@@ -221,17 +325,31 @@ final class ClipboardStore: ObservableObject {
     /// Delete every entry (tinycast's "Delete All Entries") and persist immediately —
     /// a deliberate action must not ride the insert debounce.
     func removeAll() {
+        let snapshot = items
         items.removeAll()
+        for item in snapshot {
+            deleteOwnedImage(item)
+        }
         persistNow()
         FocusRestorer.log("clipboard: removed all items")
     }
 
-    /// Move an existing item (matched by text) back to the top of the history.
-    private func promote(text: String) {
-        guard let index = items.firstIndex(where: { $0.text == text }) else { return }
+    /// Move an existing item back to the top of the history.
+    private func promote(_ item: ClipboardItem) {
+        guard let index = items.firstIndex(where: { $0.id == item.id }) else {
+            // Text paste from a synthetic item: match by text content.
+            if item.kind == .text,
+               let textIndex = items.firstIndex(where: { $0.kind == .text && $0.text == item.text }),
+               textIndex != 0
+            {
+                let existing = items.remove(at: textIndex)
+                items.insert(existing, at: 0)
+            }
+            return
+        }
         guard index != 0 else { return }
-        let item = items.remove(at: index)
-        items.insert(item, at: 0)
+        let existing = items.remove(at: index)
+        items.insert(existing, at: 0)
     }
 
     // MARK: - Pasteboard watch
@@ -250,10 +368,52 @@ final class ClipboardStore: ObservableObject {
         // Never record secrets (password managers, etc.).
         if let types = pb.types, !Set(types).isDisjoint(with: Self.sensitiveTypes) { return }
 
-        // TODO(image support, intake tinycast): capture .png/.tiff copies here.
-        // Tinycast re-encodes TIFF→PNG off the poll thread (Task.detached — a
-        // big image takes 100ms+) and stores the PNG blob in an images dir,
-        // with the row holding a path; paste writes the PNG back to the board.
+        // Finder puts a file-type *icon* as .png/.tiff beside public.file-url.
+        // Prefer the durable file and load pixels from disk (evidence: icon was 1024²).
+        if let fileURL = ClipboardPasteboardFiles.firstDurableImageFileURL(on: pb) {
+            Task.detached(priority: .utility) { [weak self] in
+                guard let png = ClipboardPasteboardFiles.pngData(fromFile: fileURL) else {
+                    await MainActor.run {
+                        FocusRestorer.log(
+                            "clipboard: failed to read image file \(fileURL.lastPathComponent)"
+                        )
+                    }
+                    return
+                }
+                await self?.insertImage(pngData: png, persist: true)
+            }
+            return
+        }
+
+        // Any other durable file URL: never ingest the icon PNG/TIFF. Record the path.
+        if let fileURL = ClipboardPasteboardFiles.durableFileURLs(on: pb).first {
+            insertText(fileURL.path, persist: true)
+            return
+        }
+
+        // Bare inline image (browser Copy Image / screenshot-to-clipboard) — no file URL.
+        if let type = pb.availableType(from: [.png, .tiff]),
+           let data = pb.data(forType: type)
+        {
+            let isPNG = type == .png
+            Task.detached(priority: .utility) { [weak self] in
+                let png: Data?
+                if isPNG {
+                    png = data
+                } else {
+                    png = NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:])
+                }
+                guard let png else {
+                    await MainActor.run {
+                        FocusRestorer.log("clipboard: TIFF→PNG failed — skipped image")
+                    }
+                    return
+                }
+                await self?.insertImage(pngData: png, persist: true)
+            }
+            return
+        }
+
         guard let text = pb.string(forType: .string)?
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !text.isEmpty
@@ -261,11 +421,11 @@ final class ClipboardStore: ObservableObject {
             return
         }
 
-        insertItem(text: text, persist: true)
+        insertText(text, persist: true)
     }
 
     @discardableResult
-    private func insertItem(text: String, persist: Bool) -> Bool {
+    private func insertText(_ text: String, persist: Bool) -> Bool {
         if text.count > maxTextLength {
             FocusRestorer.log(
                 "clipboard: skipped oversized item len=\(text.count) (max=\(maxTextLength))"
@@ -275,23 +435,94 @@ final class ClipboardStore: ObservableObject {
 
         // Deduplicate: a re-copy of anything already in history promotes it to
         // the top instead of being dropped for being non-consecutive.
-        if let index = items.firstIndex(where: { $0.text == text }) {
+        if let index = items.firstIndex(where: { $0.kind == .text && $0.text == text }) {
             let existing = items.remove(at: index)
             items.insert(existing, at: 0)
             if persist { schedulePersist() }
             return true
         }
 
-        let item = ClipboardItem(id: UUID(), text: text, createdAt: Date())
+        let item = ClipboardItem(kind: .text, text: text, createdAt: Date())
         items.insert(item, at: 0)
-        if items.count > maxItems {
-            items = Array(items.prefix(maxItems))
-        }
-        FocusRestorer.log("clipboard: captured item len=\(text.count) history=\(items.count)")
+        trimToMaxItems()
+        FocusRestorer.log("clipboard: captured text len=\(text.count) history=\(items.count)")
         if persist {
             schedulePersist()
         }
         return true
+    }
+
+    @discardableResult
+    private func insertImage(pngData: Data, persist: Bool) -> ClipboardItem? {
+        guard let imagesDirectoryURL else {
+            FocusRestorer.log("clipboard: no images dir — skipped image capture")
+            return nil
+        }
+
+        let filename = UUID().uuidString + ".png"
+        let fileURL = imagesDirectoryURL.appendingPathComponent(filename, isDirectory: false)
+
+        do {
+            try FileManager.default.createDirectory(
+                at: imagesDirectoryURL,
+                withIntermediateDirectories: true
+            )
+            try pngData.write(to: fileURL, options: .atomic)
+        } catch {
+            FocusRestorer.log("clipboard: image write failed — \(error.localizedDescription)")
+            return nil
+        }
+
+        let item = ClipboardItem(
+            kind: .image,
+            text: "",
+            imagePath: fileURL.path,
+            createdAt: Date()
+        )
+        items.insert(item, at: 0)
+        enforceImageCap()
+        trimToMaxItems()
+        FocusRestorer.log(
+            "clipboard: captured image (\(pngData.count) bytes) history=\(items.count) images=\(imageCount)"
+        )
+        if persist {
+            schedulePersist()
+        }
+        return item
+    }
+
+    private var imageCount: Int {
+        items.reduce(0) { $0 + ($1.kind == .image ? 1 : 0) }
+    }
+
+    /// Drop oldest image rows when over the soft cap; delete their owned blobs.
+    private func enforceImageCap() {
+        while imageCount > maxImages {
+            guard let index = items.lastIndex(where: { $0.kind == .image }) else { break }
+            let removed = items.remove(at: index)
+            deleteOwnedImage(removed)
+        }
+    }
+
+    private func trimToMaxItems() {
+        guard items.count > maxItems else { return }
+        let dropped = Array(items.suffix(items.count - maxItems))
+        items = Array(items.prefix(maxItems))
+        for item in dropped {
+            deleteOwnedImage(item)
+        }
+    }
+
+    private func deleteOwnedImage(_ item: ClipboardItem) {
+        guard item.kind == .image, let path = item.imagePath, ownsImage(at: path) else { return }
+        try? FileManager.default.removeItem(atPath: path)
+    }
+
+    private func ownsImage(at path: String) -> Bool {
+        guard let imagesDirectoryURL else { return false }
+        let dir = imagesDirectoryURL.standardizedFileURL.path
+        let standardized = URL(fileURLWithPath: path).standardizedFileURL.path
+        return standardized.hasPrefix(dir + "/")
     }
 
     // MARK: - Disk persistence
@@ -303,6 +534,7 @@ final class ClipboardStore: ObservableObject {
             decoder.dateDecodingStrategy = .iso8601
             let decoded = try decoder.decode([ClipboardItem].self, from: data)
             items = Array(decoded.prefix(maxItems))
+            enforceImageCap()
             FocusRestorer.log("clipboard: loaded \(items.count) items from disk")
         } catch {
             FocusRestorer.log("clipboard: failed to load history — \(error.localizedDescription)")
@@ -430,7 +662,7 @@ final class ClipboardStore: ObservableObject {
 ///
 /// Prefer Accessibility trust so macOS delivers the synthetic keys. We still post
 /// even when `isTrusted` is false (TCC can lag after the user enables the toggle);
-/// text is always on the pasteboard so ⌘V manually still works.
+/// content is always on the pasteboard so ⌘V manually still works.
 enum ClipboardPaster {
     static func pasteCommandV(after delay: TimeInterval = 0.15) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
@@ -438,7 +670,7 @@ enum ClipboardPaster {
             let trusted = FocusRestorer.isTrusted()
             if !trusted {
                 FocusRestorer.log(
-                    "clipboard: posting ⌘V without AX trust (may be dropped; text is on pasteboard)"
+                    "clipboard: posting ⌘V without AX trust (may be dropped; content is on pasteboard)"
                 )
             }
 

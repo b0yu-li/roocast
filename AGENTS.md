@@ -123,7 +123,7 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 ## What Roocast Is
 
 - **Launcher** — ⌘Space summons app/folder search (global hotkey).
-- **Clipboard history** — ⌘Esc summons recent pasteboard items (global hotkey, same process).
+- **Clipboard history** — ⌘Esc summons recent pasteboard items (global hotkey, same process). Text + images (Finder image files from disk, or inline PNG/TIFF → owned PNG blobs); list + preview split pane; no OCR / non-image file gallery yet.
 - **Calculator (math)** — type an expression (`2+2`, `sqrt(9)`, `10% of 50`); a lead result row appears; Enter copies the answer. Tinycast-inspired, math-only (no units/currency/history yet).
 - **Zoxide jump** — type `z <keywords>` (e.g. `z downloads`); best frecent match via the `zoxide` CLI opens in Finder on Enter. Requires `zoxide` on the Mac (Homebrew path resolved explicitly for GUI apps).
 - **Window snap (minimal)** — built-in commands for left / right / top / bottom half, first third / last two thirds, move to top / bottom / left / right (keep size, flush to edge), maximize (fill visible frame in the current Space — not macOS fullscreen) / reasonable size (~60% centered, Tinycast-style). Accessibility. Grow only with deliberate, small additions.

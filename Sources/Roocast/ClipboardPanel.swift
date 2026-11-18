@@ -39,6 +39,12 @@ final class ClipboardPanel: FloatingPanel {
         })
     }
 
+    override func hide(restoreFocus: Bool) {
+        // Drop large preview bitmaps; row tiles stay warm for the next open.
+        ClipboardImageThumbnail.purgePreviews()
+        super.hide(restoreFocus: restoreFocus)
+    }
+
     private func focusSearchField() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }

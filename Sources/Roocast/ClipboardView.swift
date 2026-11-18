@@ -2,14 +2,16 @@ import SwiftUI
 import AppKit
 
 enum ClipboardLayout {
-    static let width: CGFloat = 560
-    static let height: CGFloat = 360
+    /// Split pane: list (290) + divider + preview — Tinycast-inspired, Roocast-light.
+    static let width: CGFloat = 680
+    static let height: CGFloat = 420
+    static let listWidth: CGFloat = 290
     static let cornerRadius: CGFloat = 10
 }
 
 enum ClipboardMenuLayout {
     static let menuWidth: CGFloat = 260
-    static let listWidth: CGFloat = ClipboardLayout.width
+    static let listWidth: CGFloat = ClipboardLayout.listWidth
     static let headerHeight: CGFloat = 54
 }
 
@@ -39,6 +41,11 @@ struct ClipboardView: View {
         store.items(matching: query)
     }
 
+    private var selectedItem: ClipboardItem? {
+        guard filteredItems.indices.contains(navigationState.selectedIndex) else { return nil }
+        return filteredItems[navigationState.selectedIndex]
+    }
+
     private var rows: [ListRow] {
         var result: [ListRow] = []
         var lastBucket: DateBucket?
@@ -57,7 +64,7 @@ struct ClipboardView: View {
         VStack(spacing: 0) {
             searchHeader
             Divider()
-            listPanel
+            contentPanel
         }
         .frame(width: ClipboardLayout.width, height: ClipboardLayout.height)
         .background(panelBackground)
@@ -127,9 +134,22 @@ struct ClipboardView: View {
         }
     }
 
-    private var listPanel: some View {
+    private var contentPanel: some View {
         ZStack(alignment: .bottomTrailing) {
-            listWithMenu
+            if filteredItems.isEmpty {
+                emptyState
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                HStack(spacing: 0) {
+                    listWithMenu
+                        .frame(width: ClipboardLayout.listWidth)
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.08))
+                        .frame(width: 1)
+                    ClipboardPreviewPane(item: selectedItem, store: store)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
             Text("v\(AppVersion.string)")
                 .font(.system(size: 9, weight: .light))
                 .foregroundStyle(.quaternary)
@@ -167,16 +187,12 @@ struct ClipboardView: View {
     @ViewBuilder
     private var listContent: some View {
         LazyVStack(spacing: 1) {
-            if filteredItems.isEmpty {
-                emptyState
-            } else {
-                ForEach(rows) { row in
-                    switch row {
-                    case .header(let title):
-                        dateHeader(title: title)
-                    case .item(let item, let index):
-                        historyRow(item: item, index: index)
-                    }
+            ForEach(rows) { row in
+                switch row {
+                case .header(let title):
+                    dateHeader(title: title)
+                case .item(let item, let index):
+                    historyRow(item: item, index: index)
                 }
             }
         }
@@ -213,7 +229,7 @@ struct ClipboardView: View {
         // update during a scroll transaction (seen as two highlighted rows —
         // the just-deselected row never re-rendered), so selection must not
         // depend on the parent re-diffing the row.
-        return ClipboardRow(item: item, index: index, navigationState: navigationState)
+        return ClipboardRow(item: item, index: index, store: store, navigationState: navigationState)
             .id(item.id)
             .onTapGesture {
                 navigationState.selectedIndex = index
@@ -353,7 +369,7 @@ struct ClipboardView: View {
                 onPaste(item)
             case .copy:
                 menuModel.close()
-                store?.copyToPasteboard(item.text)
+                store?.copyToPasteboard(item)
             case .deleteEntry:
                 menuModel.close()
                 store?.remove(item)
@@ -386,6 +402,84 @@ struct ClipboardView: View {
         let item = filteredItems[navigationState.selectedIndex]
         query = ""
         onPaste(item)
+    }
+}
+
+/// Right-hand preview for the selected clipboard row.
+struct ClipboardPreviewPane: View {
+    let item: ClipboardItem?
+    let store: ClipboardStore
+
+    var body: some View {
+        Group {
+            if let item {
+                switch item.kind {
+                case .text:
+                    ScrollView {
+                        Text(item.text)
+                            .font(.system(size: 12, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .padding(12)
+                    }
+                case .image:
+                    ClipboardAsyncThumbnail(
+                        url: store.imageURL(for: item),
+                        maxPixel: ClipboardImageThumbnail.previewMaxPixel
+                    ) { image in
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                            )
+                            .padding(12)
+                    } placeholder: {
+                        Image(systemName: "photo")
+                            .font(.system(size: 36, weight: .light))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            } else {
+                Color.clear
+            }
+        }
+    }
+}
+
+/// Async ImageIO thumbnail; cancels when scrolled / selection changes away.
+private struct ClipboardAsyncThumbnail<Content: View, Placeholder: View>: View {
+    let url: URL?
+    let maxPixel: CGFloat
+    @ViewBuilder let content: (Image) -> Content
+    @ViewBuilder let placeholder: () -> Placeholder
+
+    @State private var nsImage: NSImage?
+
+    var body: some View {
+        Group {
+            if let nsImage {
+                content(Image(nsImage: nsImage))
+            } else {
+                placeholder()
+            }
+        }
+        .task(id: taskKey) {
+            nsImage = nil
+            guard let url else { return }
+            if let cached = ClipboardImageThumbnail.cached(url, maxPixel: maxPixel) {
+                nsImage = cached
+                return
+            }
+            nsImage = await ClipboardImageThumbnail.loadAsync(url, maxPixel: maxPixel)
+        }
+    }
+
+    private var taskKey: String {
+        "\(url?.path ?? "")#\(Int(maxPixel))"
     }
 }
 
@@ -461,16 +555,17 @@ struct ClipboardActionsMenuView: View {
 struct ClipboardRow: View {
     let item: ClipboardItem
     let index: Int
+    let store: ClipboardStore
     @ObservedObject var navigationState: NavigationState
 
     private var isSelected: Bool { index == navigationState.selectedIndex }
 
+    private let artworkSize: CGFloat = 28
+
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "text.alignleft")
-                .font(.system(size: 14))
-                .foregroundStyle(isSelected ? Color.white.opacity(0.9) : .secondary)
-                .frame(width: 24, height: 24)
+            rowThumbnail
+                .frame(width: artworkSize, height: artworkSize)
 
             Text(item.preview)
                 .font(.system(size: 13))
@@ -493,6 +588,33 @@ struct ClipboardRow: View {
             if isSelected {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(Color.accentColor)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var rowThumbnail: some View {
+        switch item.kind {
+        case .text:
+            Image(systemName: "text.alignleft")
+                .font(.system(size: 14))
+                .foregroundStyle(isSelected ? Color.white.opacity(0.9) : .secondary)
+                .frame(width: artworkSize, height: artworkSize)
+        case .image:
+            ClipboardAsyncThumbnail(
+                url: store.imageURL(for: item),
+                maxPixel: ClipboardImageThumbnail.rowMaxPixel
+            ) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: artworkSize, height: artworkSize)
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            } placeholder: {
+                Image(systemName: "photo")
+                    .font(.system(size: 14))
+                    .foregroundStyle(isSelected ? Color.white.opacity(0.9) : .secondary)
+                    .frame(width: artworkSize, height: artworkSize)
             }
         }
     }

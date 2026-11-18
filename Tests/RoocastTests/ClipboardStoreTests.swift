@@ -7,12 +7,28 @@ final class ClipboardStoreTests: XCTestCase {
 
     func testPreviewCollapsesWhitespaceAndTruncates() {
         let long = String(repeating: "a", count: 130)
-        let item = ClipboardItem(id: UUID(), text: "hello\n\tworld", createdAt: Date())
+        let item = ClipboardItem(text: "hello\n\tworld")
         XCTAssertEqual(item.preview, "hello  world")
 
-        let longItem = ClipboardItem(id: UUID(), text: long, createdAt: Date())
+        let longItem = ClipboardItem(text: long)
         XCTAssertTrue(longItem.preview.hasSuffix("…"))
         XCTAssertEqual(longItem.preview.count, 121)
+
+        let image = ClipboardItem(kind: .image, text: "", imagePath: "/tmp/x.png")
+        XCTAssertEqual(image.preview, "Image")
+    }
+
+    func testLegacyJSONWithoutKindDecodesAsText() throws {
+        let json = """
+        [{"id":"00000000-0000-0000-0000-000000000001","text":"hello","createdAt":"2026-01-01T00:00:00Z"}]
+        """.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let items = try decoder.decode([ClipboardItem].self, from: json)
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].kind, .text)
+        XCTAssertEqual(items[0].text, "hello")
+        XCTAssertNil(items[0].imagePath)
     }
 
     func testPrependRespectsMaxItems() {
@@ -169,17 +185,82 @@ final class ClipboardStoreTests: XCTestCase {
 
     /// Today's rows show a clock time, older rows show the relative date.
     func testTimeLabelFormats() {
-        let today = ClipboardItem(id: UUID(), text: "now", createdAt: Date())
+        let today = ClipboardItem(text: "now")
         XCTAssertNotEqual(today.timeLabel, "")
         // Same-day label comes from the time-only formatter: it cannot be a
         // relative day name.
         XCTAssertFalse(today.timeLabel.hasPrefix("Today"))
 
         let lastMonth = ClipboardItem(
-            id: UUID(), text: "old",
+            text: "old",
             createdAt: Calendar.current.date(byAdding: .month, value: -1, to: Date())!
         )
         XCTAssertFalse(lastMonth.timeLabel.isEmpty)
+    }
+
+    func testImageSoftCapDeletesOldestOwnedBlobs() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("roocast-clipboard-images-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let images = dir.appendingPathComponent("images", isDirectory: true)
+        let store = ClipboardStore(
+            maxItems: 20,
+            maxImages: 2,
+            imagesDirectoryURL: images,
+            persistToDisk: false
+        )
+
+        // 1×1 PNG
+        let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
+        XCTAssertNotNil(store.prependImageForTesting(png))
+        XCTAssertNotNil(store.prependImageForTesting(png))
+        XCTAssertNotNil(store.prependImageForTesting(png))
+
+        XCTAssertEqual(store.items.filter { $0.kind == ClipboardItem.Kind.image }.count, 2)
+        let files = try FileManager.default.contentsOfDirectory(atPath: images.path)
+        XCTAssertEqual(files.count, 2)
+    }
+
+    func testPasteboardFilesReadsPNGFromDiskNotIconSized() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("roocast-pb-files-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // 2×3 PNG (not a 1024² Finder icon).
+        let png = Data(base64Encoded:
+            "iVBORw0KGgoAAAANSUhEUgAAAAIAAAADCAYAAAC56t6BAAAAFUlEQVR42mP8z8BQz0AEYBxVSF+FAP5FDvcfRYWgAAAAAElFTkSuQmCC"
+        )!
+        let file = dir.appendingPathComponent("shot.png")
+        try png.write(to: file)
+
+        XCTAssertTrue(ClipboardPasteboardFiles.isImageFile(file))
+        let owned = ClipboardPasteboardFiles.pngData(fromFile: file)
+        XCTAssertEqual(owned, png)
+
+        let jpeg = dir.appendingPathComponent("notes.txt")
+        try "hello".write(to: jpeg, atomically: true, encoding: .utf8)
+        XCTAssertFalse(ClipboardPasteboardFiles.isImageFile(jpeg))
+    }
+
+    func testItemsMatchingFindsImageLabel() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("roocast-clipboard-images-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let store = ClipboardStore(
+            imagesDirectoryURL: dir.appendingPathComponent("images", isDirectory: true),
+            persistToDisk: false
+        )
+        store.prependForTesting("hello text")
+        let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
+        XCTAssertNotNil(store.prependImageForTesting(png))
+
+        XCTAssertEqual(store.items(matching: "image").count, 1)
+        XCTAssertEqual(store.items(matching: "hello").map(\ClipboardItem.text), ["hello text"])
     }
 
     func testDefaultPollIntervalIsRelaxed() {
