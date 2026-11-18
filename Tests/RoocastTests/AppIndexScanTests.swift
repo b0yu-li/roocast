@@ -1,7 +1,8 @@
 import XCTest
 @testable import Roocast
 
-/// Regression: the disk scan must include apps whose bundle is a symlink.
+/// Regression: the disk scan must include apps whose bundle is a symlink,
+/// plus Finder (CoreServices sibling) and Simulator (inside Xcode.app).
 ///
 /// `/Applications/Safari.app` is a root-owned symlink into the Safari cryptex
 /// and carries the `UF_HIDDEN` flag — `.skipsHiddenFiles` silently dropped it
@@ -10,15 +11,8 @@ final class AppIndexScanTests: XCTestCase {
     /// Mirrors `AppIndex.scanApps` enumeration so the regression is caught at the
     /// file-system layer (the pure ranking layer is already covered by AppSearchTests).
     private func scanDiskForApps() -> Set<String> {
-        let searchPaths = [
-            URL(fileURLWithPath: "/Applications"),
-            URL(fileURLWithPath: "/System/Applications"),
-            URL(fileURLWithPath: "/System/Library/CoreServices/Applications"),
-            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications"),
-        ]
-
         var names: Set<String> = []
-        for baseURL in searchPaths {
+        for baseURL in AppIndex.applicationSearchRoots {
             guard let enumerator = FileManager.default.enumerator(
                 at: baseURL,
                 includingPropertiesForKeys: nil,
@@ -31,6 +25,10 @@ final class AppIndexScanTests: XCTestCase {
                 }
             }
         }
+        for bundleURL in AppIndex.extraApplicationBundles
+        where FileManager.default.fileExists(atPath: bundleURL.path) {
+            names.insert(bundleURL.deletingPathExtension().lastPathComponent)
+        }
         return names
     }
 
@@ -42,6 +40,33 @@ final class AppIndexScanTests: XCTestCase {
 
         let names = scanDiskForApps()
         XCTAssertTrue(names.contains("Safari"), "Scan must include symlinked /Applications/Safari.app")
+    }
+
+    func testScanIncludesFinder() throws {
+        let finder = "/System/Library/CoreServices/Finder.app"
+        try XCTSkipIf(
+            !FileManager.default.fileExists(atPath: finder),
+            "No Finder.app on this machine"
+        )
+        let names = scanDiskForApps()
+        XCTAssertTrue(
+            names.contains("Finder"),
+            "Scan must include /System/Library/CoreServices/Finder.app"
+        )
+    }
+
+    func testScanIncludesSimulator() throws {
+        let simulator =
+            "/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app"
+        try XCTSkipIf(
+            !FileManager.default.fileExists(atPath: simulator),
+            "No Simulator.app under Xcode on this machine"
+        )
+        let names = scanDiskForApps()
+        XCTAssertTrue(
+            names.contains("Simulator"),
+            "Scan must include Simulator inside Xcode Developer Applications"
+        )
     }
 
     func testScanSkipsDotFiles() {

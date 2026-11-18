@@ -149,8 +149,8 @@ enum AppSearch {
     ///   Pass stubs in unit tests to avoid disk icon lookup.
     /// - Parameter frontmostPath: Bundle path of the frontmost app to exclude from
     ///   empty-query switch suggestions. Ignored when the query is non-empty.
-    /// - Parameter selfPath: Bundle path of Roocast itself to exclude from switch
-    ///   suggestions. Ignored when the query is non-empty.
+    /// - Parameter selfPath: Bundle path of Roocast itself — always excluded from
+    ///   app rows (empty switch + typed search). Quit Roocast still matches as a command.
     nonisolated static func results(
         query: String,
         apps: [AppItem],
@@ -158,9 +158,14 @@ enum AppSearch {
         frontmostPath: String? = nil,
         selfPath: String? = nil
     ) -> [AppItem] {
+        let appsExcludingSelf = excludingSelf(apps, selfPath: selfPath)
         let lowered = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if lowered.isEmpty {
-            return switchSuggestions(apps: apps, frontmostPath: frontmostPath, selfPath: selfPath)
+            return switchSuggestions(
+                apps: appsExcludingSelf,
+                frontmostPath: frontmostPath,
+                selfPath: selfPath
+            )
         }
 
         let folderItems = folders ?? FolderShortcut.builtIns.map { AppItem.folder($0) }
@@ -209,8 +214,15 @@ enum AppSearch {
         if matchesMoveToRightCommand(lowered) {
             output.append(.moveToRight)
         }
-        output.append(contentsOf: rank(query: lowered, apps: apps + folderItems))
+        output.append(contentsOf: rank(query: lowered, apps: appsExcludingSelf + folderItems))
         return output
+    }
+
+    /// Drop the launcher's own bundle from app rows (already open / not a switch target).
+    nonisolated static func excludingSelf(_ apps: [AppItem], selfPath: String?) -> [AppItem] {
+        guard let selfPath else { return apps }
+        let selfCanon = AppIndex.canonicalPath(selfPath)
+        return apps.filter { AppIndex.canonicalPath($0.path) != selfCanon }
     }
 
     /// Rank items by intention score (prefix > mid-string); ties break by name.

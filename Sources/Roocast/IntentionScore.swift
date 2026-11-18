@@ -82,13 +82,14 @@ enum IntentionScore {
     ) -> Int {
         guard app.kind == .app, app.isRunning else { return 0 }
 
-        if let selfPath, app.path == selfPath {
+        // Canonicalize so /Applications/Roocast.app matches a symlinked index path.
+        if let selfPath, AppIndex.canonicalPath(app.path) == AppIndex.canonicalPath(selfPath) {
             return 0
         }
 
         if let frontmostPath,
            app.profile == nil,
-           app.path == frontmostPath {
+           AppIndex.canonicalPath(app.path) == AppIndex.canonicalPath(frontmostPath) {
             return 0
         }
 

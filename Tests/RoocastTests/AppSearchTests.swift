@@ -190,6 +190,29 @@ final class AppSearchTests: XCTestCase {
         XCTAssertEqual(results.map(\.name), ["Slack"])
     }
 
+    func testTypedQueryExcludesSelfLauncherButKeepsQuitCommand() {
+        let apps = [
+            AppItem.stub(name: "Roocast", path: "/Applications/Roocast.app"),
+            AppItem.stub(name: "Notes", path: "/Applications/Notes.app"),
+        ]
+        let roo = AppSearch.results(
+            query: "roo",
+            apps: apps,
+            folders: [],
+            selfPath: "/Applications/Roocast.app"
+        )
+        XCTAssertFalse(roo.contains { $0.kind == .app && $0.name == "Roocast" })
+
+        let quit = AppSearch.results(
+            query: "quit",
+            apps: apps,
+            folders: [],
+            selfPath: "/Applications/Roocast.app"
+        )
+        XCTAssertEqual(quit.first?.kind, .quit)
+        XCTAssertFalse(quit.contains { $0.kind == .app && $0.name == "Roocast" })
+    }
+
     func testRankPrefersNotesOverKeynoteForNo() {
         let apps = [
             AppItem.stub(name: "Keynote"),

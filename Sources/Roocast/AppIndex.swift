@@ -56,9 +56,39 @@ final class AppIndex: ObservableObject {
         apps = found
     }
 
+    /// Directories enumerated for `.app` bundles.
+    ///
+    /// Includes Xcode's Developer Applications so Simulator is found (it lives
+    /// inside `Xcode.app`, which `.skipsPackageDescendants` would otherwise skip).
+    nonisolated static var applicationSearchRoots: [URL] {
+        var roots = [
+            URL(fileURLWithPath: "/Applications"),
+            URL(fileURLWithPath: "/System/Applications"),
+            URL(fileURLWithPath: "/System/Library/CoreServices/Applications"),
+            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications"),
+            URL(fileURLWithPath: "/Applications/Xcode.app/Contents/Developer/Applications"),
+        ]
+        let xcodeBeta = URL(
+            fileURLWithPath: "/Applications/Xcode-beta.app/Contents/Developer/Applications"
+        )
+        if FileManager.default.fileExists(atPath: xcodeBeta.path) {
+            roots.append(xcodeBeta)
+        }
+        return roots
+    }
+
+    /// Bundles that live outside the search roots (e.g. Finder is a CoreServices sibling,
+    /// not under `CoreServices/Applications`).
+    nonisolated static var extraApplicationBundles: [URL] {
+        [
+            URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app"),
+        ]
+    }
+
     private nonisolated static func scanApps() -> [AppItem] {
         var found: [AppItem] = []
-        
+        var seenKeys = Set<String>()
+
         // Only `.regular` apps count as running for indicators / switch suggestions.
         // Background agents (e.g. Books with `.prohibited`) stay in the process list
         // without a switchable UI; accessory apps (Roocast) are not switch targets.
@@ -68,20 +98,41 @@ final class AppIndex: ObservableObject {
                 .compactMap { $0.bundleURL?.path }
                 .map { Self.canonicalPath($0) }
         )
-        
+
         // Detect Firefox profiles once; running state uses the same list (no double detect).
         let firefoxProfiles = ProfileManager.detectFirefoxProfiles()
         let runningFirefoxProfiles = ProfileManager.detectRunningProfiles(among: firefoxProfiles)
         var emittedFirefox = false
 
-        let searchPaths = [
-            URL(fileURLWithPath: "/Applications"),
-            URL(fileURLWithPath: "/System/Applications"),
-            URL(fileURLWithPath: "/System/Library/CoreServices/Applications"),
-            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications"),
-        ]
+        func appendItem(url: URL, isRunning: Bool, profile: String? = nil) {
+            let key = "\(Self.canonicalPath(url.path))#\(profile ?? "")"
+            guard seenKeys.insert(key).inserted else { return }
+            found.append(AppItem(url: url, isRunning: isRunning, profile: profile))
+        }
 
-        for baseURL in searchPaths {
+        func consider(bundleURL fileURL: URL) {
+            let isRunning = runningBundlePaths.contains(Self.canonicalPath(fileURL.path))
+
+            // Check if this is Firefox with profiles
+            if fileURL.lastPathComponent == "Firefox.app", !firefoxProfiles.isEmpty {
+                // One Firefox.app on disk is enough — avoid duplicating profile rows
+                // if the bundle appears under multiple search roots.
+                guard !emittedFirefox else { return }
+                emittedFirefox = true
+                for profile in firefoxProfiles {
+                    // Defense in depth: never list stub folders (no prefs, not running).
+                    let profileIsRunning = runningFirefoxProfiles[profile.name] != nil
+                    guard ProfileManager.hasPrefsJS(at: profile.path) || profileIsRunning else {
+                        continue
+                    }
+                    appendItem(url: fileURL, isRunning: profileIsRunning, profile: profile.name)
+                }
+            } else {
+                appendItem(url: fileURL, isRunning: isRunning)
+            }
+        }
+
+        for baseURL in applicationSearchRoots {
             // NOTE: no `.skipsHiddenFiles` here — the root-owned /Applications/Safari.app
             // symlink into the Safari cryptex carries the UF_HIDDEN flag, so that option
             // silently dropped Safari from the index. Dot-files are filtered by name below.
@@ -95,31 +146,14 @@ final class AppIndex: ObservableObject {
                 // Name-based hidden filter (replaces `.skipsHiddenFiles`, see note above).
                 guard !fileURL.lastPathComponent.hasPrefix(".") else { continue }
                 if fileURL.pathExtension == "app" {
-                    let isRunning = runningBundlePaths.contains(Self.canonicalPath(fileURL.path))
-                    
-                    // Check if this is Firefox with profiles
-                    if fileURL.lastPathComponent == "Firefox.app", !firefoxProfiles.isEmpty {
-                        // One Firefox.app on disk is enough — avoid duplicating profile rows
-                        // if the bundle appears under multiple search roots.
-                        guard !emittedFirefox else { continue }
-                        emittedFirefox = true
-                        for profile in firefoxProfiles {
-                            // Defense in depth: never list stub folders (no prefs, not running).
-                            let profileIsRunning = runningFirefoxProfiles[profile.name] != nil
-                            guard ProfileManager.hasPrefsJS(at: profile.path) || profileIsRunning else {
-                                continue
-                            }
-                            found.append(AppItem(
-                                url: fileURL,
-                                isRunning: profileIsRunning,
-                                profile: profile.name
-                            ))
-                        }
-                    } else {
-                        found.append(AppItem(url: fileURL, isRunning: isRunning))
-                    }
+                    consider(bundleURL: fileURL)
                 }
             }
+        }
+
+        for bundleURL in extraApplicationBundles {
+            guard FileManager.default.fileExists(atPath: bundleURL.path) else { continue }
+            consider(bundleURL: bundleURL)
         }
 
         return found.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
@@ -148,12 +182,15 @@ final class AppIndex: ObservableObject {
 
         // Nonactivating panel keeps the prior app frontmost — use it to drop
         // the app the user is already in from empty-query switch suggestions.
-        let frontmostPath = NSWorkspace.shared.frontmostApplication?.bundleURL?.path
+        // Canonicalize so cryptex / symlink paths still match indexed rows.
+        let frontmostPath = NSWorkspace.shared.frontmostApplication?.bundleURL.map {
+            Self.canonicalPath($0.path)
+        }
         return AppSearch.results(
             query: query,
             apps: apps,
             frontmostPath: frontmostPath,
-            selfPath: Bundle.main.bundlePath
+            selfPath: Self.canonicalPath(Bundle.main.bundlePath)
         )
     }
 
