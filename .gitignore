@@ -15,10 +15,18 @@ DerivedData/
 # Local task backlog (session notes, future work) — never commit
 /.backlog/
 
+# Maintainer-only ops notes (Team ID, notary paths, CF account)
+/docs/DISTRIBUTION.private.md
+
 # Icon generator venv (Pillow/numpy)
 /.venv/
+**/__pycache__/
+*.py[cod]
 
 # Icon iteration probes — keep locked.png / locked-masked.png / LOCKED.md
 /Scripts/icon/iter-*.png
 /Scripts/icon/probe-*.png
+
+# Release artifacts (DMG / checksums / staging)
+/dist/
 

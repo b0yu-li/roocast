@@ -2,6 +2,12 @@
 
 Deferred work. Not in the shipping command list until proven on a real install.
 
+## Homebrew — official homebrew-cask (later)
+
+**Personal tap is live:** https://github.com/b0yu-li/homebrew-roocast (`brew tap b0yu-li/roocast`). See `docs/DISTRIBUTION.md`.
+
+**Still later:** PR into official `homebrew/homebrew-cask` for bare `brew install --cask roocast` (no tap). Does **not** require open-sourcing the app — same DMG URL model.
+
 ## Toggle System Appearance
 
 **Goal:** Built-in command (Tinycast-style) — type `dark` / `light` / `toggle appearance` → flip macOS light/dark.

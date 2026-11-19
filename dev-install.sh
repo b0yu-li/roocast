@@ -8,6 +8,7 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "${ROOT}"
 
 APP_NAME="Roocast"
+BUNDLE_ID="com.example.roocast"
 INSTALL_DIR="/Applications"
 BUILD_DIR=".build/release"
 BUNDLE_NAME="${APP_NAME}.app"
@@ -92,7 +93,7 @@ cat > "${BUILD_DIR}/${BUNDLE_NAME}/Contents/Info.plist" << EOF
     <key>CFBundleExecutable</key>
     <string>${APP_NAME}</string>
     <key>CFBundleIdentifier</key>
-    <string>com.roocast.app</string>
+    <string>${BUNDLE_ID}</string>
     <key>CFBundleName</key>
     <string>${APP_NAME}</string>
     <key>CFBundlePackageType</key>
@@ -174,17 +175,17 @@ if [ -n "${IDENTITY}" ]; then
 fi
 
 if [ -n "${IDENTITY}" ]; then
-    if codesign --force --deep --sign "${IDENTITY}" --identifier "com.roocast.app" "${INSTALL_PATH}"; then
+    if codesign --force --deep --sign "${IDENTITY}" --identifier "${BUNDLE_ID}" "${INSTALL_PATH}"; then
         echo "   Signed with stable identity ${IDENTITY_LABEL:-$IDENTITY}"
-        echo "   Accessibility grant survives rebuilds (one re-grant needed after switching off adhoc)."
-        codesign -dv --verbose=2 "${INSTALL_PATH}" 2>&1 | awk '/Authority=|TeamIdentifier=/{print "   "$0}'
+        echo "   Accessibility grant survives rebuilds (one re-grant needed after switching off adhoc / bundle-id change)."
+        codesign -dv --verbose=2 "${INSTALL_PATH}" 2>&1 | awk '/Authority=|TeamIdentifier=|Identifier=/{print "   "$0}'
     else
         echo "   ⚠️  Signing with ${IDENTITY_LABEL:-$IDENTITY} failed — falling back to adhoc." >&2
-        codesign --force --deep --sign - --identifier "com.roocast.app" "${INSTALL_PATH}" 2>/dev/null || true
+        codesign --force --deep --sign - --identifier "${BUNDLE_ID}" "${INSTALL_PATH}" 2>/dev/null || true
     fi
 else
     echo "   ⚠️  No stable signing identity found — signing adhoc (Accessibility will need re-granting after install)." >&2
-    codesign --force --deep --sign - --identifier "com.roocast.app" "${INSTALL_PATH}" 2>/dev/null || true
+    codesign --force --deep --sign - --identifier "${BUNDLE_ID}" "${INSTALL_PATH}" 2>/dev/null || true
 fi
 
 echo "✅ ${APP_NAME} ${VERSION} installed to ${INSTALL_PATH}"

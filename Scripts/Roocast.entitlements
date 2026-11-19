@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened-runtime entitlements for Developer ID / notarized builds.
+  Accessibility, CGEvent taps, and pasteboard use TCC — not sandbox entitlements.
+  Keep this minimal; only add keys if notarization or runtime proves they are required.
+-->
+<plist version="1.0">
+<dict>
+</dict>
+</plist>
