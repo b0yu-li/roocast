@@ -8,7 +8,7 @@ preview + re-lock if changing.
 
 ## Design
 
-Same-family as Exp-Z (`sibling Exp-Z icon pipeline`):
+Same-family as Exp-Z (sibling project icon pipeline):
 - slate→teal dual-mode field
 - cyan→lime 3D wordmark
 - flat baseline + italic shear (`LETTER_TILT_DEG = -14`)
@@ -16,7 +16,7 @@ Same-family as Exp-Z (`sibling Exp-Z icon pipeline`):
 
 ## Locked layout
 
-Two-row wordmark (layout sketch):
+Two-row wordmark:
 
 | Row | Text | Scale | nudge_x |
 | --- | ---- | ----- | ------- |

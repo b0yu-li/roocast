@@ -155,7 +155,7 @@ Roocast is a **launcher with clipboard history, quick math, zoxide jumps, light 
 | Build System       | Xcode 16+ / Swift Package Manager   |
 | Testing            | XCTest + Swift Testing              |
 | CI                 | GitHub Actions                      |
-| Distribution       | DMG + Homebrew Cask (target: MAS)  |
+| Distribution       | Open-source freeware (MIT) — notarized DMG + brew tap (`docs/DISTRIBUTION.md`) |
 
 ---
 
@@ -182,23 +182,28 @@ roocast/
 ## Getting Started
 
 ```bash
-# Clone
-git clone https://github.com/yourusername/roocast.git
-cd roocast
+# Local day-to-day (Apple Development signing)
+./dev-install.sh
 
-# Open in Xcode
-open Roocast.xcodeproj
-
-# Build & Run
-# ⌘R in Xcode, or:
-xcodebuild -scheme Roocast -configuration Debug build
+# Or: swift build / open in Xcode if you maintain an xcodeproj
+swift build -c release
 ```
+
+Public install (end users):
+
+```bash
+brew tap b0yu-li/roocast && brew trust b0yu-li/roocast && brew install --cask roocast
+```
+
+### Shipping (agents)
+
+Before changing distribution, read **`docs/DISTRIBUTION.md`**. Release loop: `Scripts/release.sh` → R2 upload → bump `~/projects/homebrew-roocast` cask → product-site deploy (see gitignored `docs/DISTRIBUTION.private.md`). **Never** put product-site hostnames in GitHub-facing docs or the Homebrew tap — site may link to GitHub, not the reverse. Never commit notary keys or account emails.
 
 ---
 
 ## License
 
-TBD
+**MIT** — see [`LICENSE`](LICENSE). Open-source freeware: source on GitHub; install via the Homebrew tap above.
 
 ---
 
