@@ -4,6 +4,8 @@ struct AppItem: Identifiable, Hashable {
     enum Kind: Hashable {
         case app
         case quit
+        case checkForUpdates
+        case uninstall
         case folder
         case leftHalf
         case rightHalf
@@ -110,6 +112,44 @@ struct AppItem: Identifiable, Hashable {
             profile: nil,
             aliases: [],
             kind: .quit
+        )
+    }()
+
+    /// Built-in command: fetch the product-site latest feed and open the DMG if newer.
+    static let checkForUpdates: AppItem = {
+        let icon = NSImage(
+            systemSymbolName: "arrow.triangle.2.circlepath",
+            accessibilityDescription: "Check for Updates"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: UUID(uuidString: "C3D4E5F6-A7B8-9012-CDEF-123456789012")!,
+            name: "Check for Updates",
+            path: "Command",
+            icon: icon,
+            isRunning: false,
+            profile: nil,
+            aliases: [],
+            kind: .checkForUpdates
+        )
+    }()
+
+    /// Built-in command: remove the app + local data (matches Homebrew zap paths).
+    static let uninstallRoocast: AppItem = {
+        let icon = NSImage(
+            systemSymbolName: "trash.fill",
+            accessibilityDescription: "Uninstall Roocast"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: UUID(uuidString: "D4E5F6A7-B8C9-0123-DEF0-234567890123")!,
+            name: "Uninstall Roocast",
+            path: "Command",
+            icon: icon,
+            isRunning: false,
+            profile: nil,
+            aliases: [],
+            kind: .uninstall
         )
     }()
 

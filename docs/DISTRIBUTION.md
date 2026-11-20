@@ -1,6 +1,6 @@
 # Roocast distribution
 
-**Open-source freeware** (MIT). Notarized DMG + personal Homebrew tap. Not Mac App Store. No Sparkle / in-app update yet.
+**Open-source freeware** (MIT). Notarized DMG + personal Homebrew tap. Not Mac App Store. In-app “Check for Updates” is a lightweight product-site JSON feed (no Sparkle).
 
 Operator secrets (Team ID, notary key paths, CF login, product-site URLs) live in **`docs/DISTRIBUTION.private.md`** on the maintainer machine only — that file is gitignored. **Do not** put product-site hostnames in this public doc or in the Homebrew tap README.
 
@@ -24,7 +24,7 @@ Legacy clipboard Keychain service `com.roocast.app.clipboard` is intentionally u
 
 - Entitlements: `Scripts/Roocast.entitlements`
 - Output: `dist/Roocast-$VERSION.dmg` (+ `.sha256`); `dist/` is gitignored
-- First public build: **0.11.0** (notarized + stapled)
+- First public build: **0.11.0** (notarized + stapled); current: see `Sources/Roocast/Version.swift`
 
 ## Public surfaces (GitHub-facing)
 
@@ -47,18 +47,23 @@ Cask `url` points at the public R2 object host (not a product-site domain). Prod
 2. `./Scripts/release.sh`
 3. Upload DMG (+ sha256) to R2 bucket `roocast-releases`
 4. Bump `version` + `sha256` in `homebrew-roocast` `Casks/roocast.rb` → push (keep cask `url` on the R2 public host; homepage → this GitHub repo)
-5. Bump product site (separate, non-GitHub deploy) — see private notes
+5. Bump product site (separate, non-GitHub deploy) — `index.html` / `script.js` **and** `roocast/latest.json` (`version`, `dmg_url`, `released`) so the in-app update command sees the new build; see private notes
 6. Smoke `brew fetch --cask b0yu-li/roocast/roocast`
+
+## In-app updates
+
+Launcher command **Check for Updates** (`update` / `check for updates`) fetches the product-site feed `roocast/latest.json`, compares semver to `AppVersion`, and opens the DMG URL when newer. No Sparkle / no auto-replace. Homebrew installs stay manual (`brew upgrade --cask`).
 
 ## Decisions
 
 - Channel: notarized DMG + personal tap; official homebrew-cask PR later (`docs/BACKLOG.md`)
 - License: **MIT** (this repo) + free binaries
 - Source is public; notary credentials, CF billing, and product-site hostnames stay private / off GitHub
+- Updates: lightweight JSON check (not Sparkle) for v1
 
 ## Backlog (distribution)
 
 - Official `homebrew/homebrew-cask` PR
 - Optional: disable `*.r2.dev` once a custom download domain is the sole production path (custom domain must not appear on GitHub until intentional)
 - Optional: registrar transfer for the product domain (private notes)
-- In-app “check for updates”
+- Optional: Sparkle / silent replace (later)

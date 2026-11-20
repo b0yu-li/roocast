@@ -170,6 +170,23 @@ struct ContentView: View {
             return
         }
 
+        if app.kind == .checkForUpdates {
+            query = ""
+            onDismiss()
+            Task { @MainActor in
+                let outcome = await UpdateCheck.check()
+                UpdateCheck.present(outcome)
+            }
+            return
+        }
+
+        if app.kind == .uninstall {
+            query = ""
+            onDismiss()
+            UninstallRoocast.run()
+            return
+        }
+
         if app.kind == .leftHalf {
             query = ""
             onWindowSnap?(.left)

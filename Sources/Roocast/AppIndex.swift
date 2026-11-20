@@ -252,4 +252,14 @@ final class AppIndex: ObservableObject {
     nonisolated static func matchesQuitCommand(_ query: String) -> Bool {
         AppSearch.matchesQuitCommand(query)
     }
+
+    /// Matches as the user types toward "update" / "check for updates".
+    nonisolated static func matchesCheckForUpdatesCommand(_ query: String) -> Bool {
+        AppSearch.matchesCheckForUpdatesCommand(query)
+    }
+
+    /// Matches as the user types toward "uninstall" / "uninstall roocast".
+    nonisolated static func matchesUninstallCommand(_ query: String) -> Bool {
+        AppSearch.matchesUninstallCommand(query)
+    }
 }
