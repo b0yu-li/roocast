@@ -14,6 +14,50 @@ final class AppSearchTests: XCTestCase {
         XCTAssertFalse(AppSearch.matchesQuitCommand("quite"))
     }
 
+    func testMatchesCheckForUpdatesCommand() {
+        XCTAssertTrue(AppSearch.matchesCheckForUpdatesCommand("u"))
+        XCTAssertTrue(AppSearch.matchesCheckForUpdatesCommand("upd"))
+        XCTAssertTrue(AppSearch.matchesCheckForUpdatesCommand("update"))
+        XCTAssertTrue(AppSearch.matchesCheckForUpdatesCommand("check"))
+        XCTAssertTrue(AppSearch.matchesCheckForUpdatesCommand("check for"))
+        XCTAssertTrue(AppSearch.matchesCheckForUpdatesCommand("check for updates"))
+        XCTAssertTrue(AppSearch.matchesCheckForUpdatesCommand("check updates"))
+        XCTAssertFalse(AppSearch.matchesCheckForUpdatesCommand(""))
+        XCTAssertFalse(AppSearch.matchesCheckForUpdatesCommand("updater"))
+        XCTAssertFalse(AppSearch.matchesCheckForUpdatesCommand("quit"))
+    }
+
+    func testMatchesUninstallCommand() {
+        XCTAssertTrue(AppSearch.matchesUninstallCommand("uni"))
+        XCTAssertTrue(AppSearch.matchesUninstallCommand("uninstall"))
+        XCTAssertTrue(AppSearch.matchesUninstallCommand("uninstall roo"))
+        XCTAssertTrue(AppSearch.matchesUninstallCommand("uninstall roocast"))
+        XCTAssertTrue(AppSearch.matchesUninstallCommand("remove roocast"))
+        XCTAssertFalse(AppSearch.matchesUninstallCommand(""))
+        XCTAssertFalse(AppSearch.matchesUninstallCommand("update"))
+        XCTAssertFalse(AppSearch.matchesUninstallCommand("quit"))
+    }
+
+    func testResultsPutsCheckForUpdates() {
+        let results = AppSearch.results(
+            query: "update",
+            apps: [AppItem.stub(name: "Notes")],
+            folders: []
+        )
+        XCTAssertEqual(results.first?.kind, .checkForUpdates)
+        XCTAssertEqual(results.first?.name, "Check for Updates")
+    }
+
+    func testResultsPutsUninstall() {
+        let results = AppSearch.results(
+            query: "uninstall",
+            apps: [AppItem.stub(name: "Notes")],
+            folders: []
+        )
+        XCTAssertEqual(results.first?.kind, .uninstall)
+        XCTAssertEqual(results.first?.name, "Uninstall Roocast")
+    }
+
     func testMatchesLeftHalfCommand() {
         XCTAssertTrue(AppSearch.matchesLeftHalfCommand("l"))
         XCTAssertTrue(AppSearch.matchesLeftHalfCommand("left"))

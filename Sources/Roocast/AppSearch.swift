@@ -11,6 +11,24 @@ enum AppSearch {
         return "quit".hasPrefix(lowered) || "quit roocast".hasPrefix(lowered)
     }
 
+    /// Matches as the user types toward "update" / "check for updates" / "check updates".
+    nonisolated static func matchesCheckForUpdatesCommand(_ query: String) -> Bool {
+        matchesBuiltInCommand(
+            query,
+            phrases: ["update", "check for updates", "check updates"],
+            aliases: []
+        )
+    }
+
+    /// Matches as the user types toward "uninstall" / "uninstall roocast" / "remove roocast".
+    nonisolated static func matchesUninstallCommand(_ query: String) -> Bool {
+        matchesBuiltInCommand(
+            query,
+            phrases: ["uninstall", "uninstall roocast", "remove roocast"],
+            aliases: []
+        )
+    }
+
     /// Matches as the user types toward "left" / "left half" / alias "lh".
     nonisolated static func matchesLeftHalfCommand(_ query: String) -> Bool {
         matchesWindowSnapCommand(
@@ -177,6 +195,12 @@ enum AppSearch {
         }
         if matchesQuitCommand(lowered) {
             output.append(.quitRoocast)
+        }
+        if matchesUninstallCommand(lowered) {
+            output.append(.uninstallRoocast)
+        }
+        if matchesCheckForUpdatesCommand(lowered) {
+            output.append(.checkForUpdates)
         }
         if matchesLeftHalfCommand(lowered) {
             output.append(.leftHalf)
