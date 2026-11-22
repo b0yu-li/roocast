@@ -7,6 +7,8 @@ enum ClipboardLayout {
     static let height: CGFloat = 420
     static let listWidth: CGFloat = 290
     static let cornerRadius: CGFloat = 10
+    /// Raycast-style bottom hint bar (Paste ↵ · Actions ⌘K).
+    static let footerHeight: CGFloat = 32
 }
 
 enum ClipboardMenuLayout {
@@ -65,6 +67,7 @@ struct ClipboardView: View {
             searchHeader
             Divider()
             contentPanel
+            actionsFooter
         }
         .frame(width: ClipboardLayout.width, height: ClipboardLayout.height)
         .background(panelBackground)
@@ -135,7 +138,7 @@ struct ClipboardView: View {
     }
 
     private var contentPanel: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack {
             if filteredItems.isEmpty {
                 emptyState
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -150,17 +153,50 @@ struct ClipboardView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            Text("v\(AppVersion.string)")
-                .font(.system(size: 9, weight: .light))
-                .foregroundStyle(.quaternary)
-                .padding(.trailing, 10)
-                .padding(.bottom, 6)
         }
         .overlay {
             if menuModel.confirmDeleteAll {
                 confirmDeleteAllOverlay
             }
         }
+    }
+
+    /// Raycast-style hint row: primary action + Actions ⌘K.
+    private var actionsFooter: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(Color.primary.opacity(0.08))
+                .frame(height: 1)
+            HStack(spacing: 0) {
+                Text("v\(AppVersion.string)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                    .monospacedDigit()
+                Spacer(minLength: 8)
+                HStack(spacing: 6) {
+                    Text("Paste")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    KeyboardKeycap(label: "↵")
+                }
+                Rectangle()
+                    .fill(Color.primary.opacity(0.18))
+                    .frame(width: 1, height: 12)
+                    .padding(.horizontal, 10)
+                HStack(spacing: 5) {
+                    Text("Actions")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    KeyboardKeycap(label: "⌘")
+                    KeyboardKeycap(label: "K")
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(height: ClipboardLayout.footerHeight - 1)
+        }
+        .frame(height: ClipboardLayout.footerHeight)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Paste, Return. Actions, Command K.")
     }
 
     /// The scrollable history with the ⌘K / right-click actions menu overlay.
@@ -267,7 +303,9 @@ struct ClipboardView: View {
     }
 
     private var listViewportHeight: CGFloat {
-        ClipboardLayout.height - ClipboardMenuLayout.headerHeight
+        ClipboardLayout.height
+            - ClipboardMenuLayout.headerHeight
+            - ClipboardLayout.footerHeight
     }
 
     /// The actions menu, anchored below the selected row (above if it would
@@ -617,5 +655,26 @@ struct ClipboardRow: View {
                     .frame(width: artworkSize, height: artworkSize)
             }
         }
+    }
+}
+
+/// Small keyboard keycap used in the clipboard footer (Raycast-style ⌘ K).
+private struct KeyboardKeycap: View {
+    let label: String
+
+    var body: some View {
+        Text(label)
+            .font(.system(size: 10, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
+            .frame(minWidth: 16, minHeight: 16)
+            .padding(.horizontal, label.count > 1 ? 3 : 0)
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color.primary.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+            )
     }
 }
