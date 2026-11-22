@@ -72,7 +72,8 @@ final class AppLauncherTests: XCTestCase {
 
     func testLauncherLayoutIsCompact() {
         XCTAssertEqual(LauncherLayout.width, 640)
-        XCTAssertEqual(LauncherLayout.height, 400)
+        XCTAssertEqual(LauncherLayout.height, 400 + LauncherLayout.footerHeight)
+        XCTAssertEqual(LauncherLayout.footerHeight, 32)
         XCTAssertGreaterThan(LauncherLayout.cornerRadius, 0)
     }
 

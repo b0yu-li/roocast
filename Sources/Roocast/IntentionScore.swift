@@ -25,10 +25,19 @@ enum IntentionScore {
         }
 
         // Prefix of any word in searchable text (profiles, multi-word names).
-        for word in searchLower.split(whereSeparator: { !$0.isLetter && !$0.isNumber }) where !word.isEmpty {
+        for word in words(in: searchLower) {
             if word.hasPrefix(q) {
                 return 70_000 - word.count
             }
+        }
+
+        // Ordered word prefixes skip filler words: "move left" → "Move to Left".
+        // Below a full-query word prefix so "left" still prefers Left Half.
+        if let skipped = orderedWordPrefixScore(query: q, text: nameLower, base: 65_000) {
+            return skipped
+        }
+        if let skipped = orderedWordPrefixScore(query: q, text: searchLower, base: 55_000) {
+            return skipped
         }
 
         // Substring in the name — later positions score lower.
@@ -44,6 +53,36 @@ enum IntentionScore {
         }
 
         return 0
+    }
+
+    private nonisolated static func words(in text: String) -> [Substring] {
+        text.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).filter { !$0.isEmpty }
+    }
+
+    /// Each query token is a prefix of some text token, in order, skipping the rest.
+    /// Two or more tokens only — single-token queries stay on the prefix/substring rules.
+    private nonisolated static func orderedWordPrefixScore(
+        query: String,
+        text: String,
+        base: Int
+    ) -> Int? {
+        let queryWords = words(in: query)
+        guard queryWords.count >= 2 else { return nil }
+        let textWords = words(in: text)
+        var cursor = 0
+        for qword in queryWords {
+            var matched = false
+            while cursor < textWords.count {
+                let word = textWords[cursor]
+                cursor += 1
+                if word.hasPrefix(qword) {
+                    matched = true
+                    break
+                }
+            }
+            if !matched { return nil }
+        }
+        return base - text.count
     }
 
     /// Typed-query score for an app row. Base name/search match, then boosts for

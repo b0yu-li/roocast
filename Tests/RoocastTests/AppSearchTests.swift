@@ -32,10 +32,45 @@ final class AppSearchTests: XCTestCase {
         XCTAssertTrue(AppSearch.matchesUninstallCommand("uninstall"))
         XCTAssertTrue(AppSearch.matchesUninstallCommand("uninstall roo"))
         XCTAssertTrue(AppSearch.matchesUninstallCommand("uninstall roocast"))
+        XCTAssertTrue(AppSearch.matchesUninstallCommand("remo"))
+        XCTAssertTrue(AppSearch.matchesUninstallCommand("remove"))
         XCTAssertTrue(AppSearch.matchesUninstallCommand("remove roocast"))
+        // Short prefixes must not false-fire via "remove roocast".
+        XCTAssertFalse(AppSearch.matchesUninstallCommand("re"))
+        XCTAssertFalse(AppSearch.matchesUninstallCommand("rem"))
         XCTAssertFalse(AppSearch.matchesUninstallCommand(""))
         XCTAssertFalse(AppSearch.matchesUninstallCommand("update"))
         XCTAssertFalse(AppSearch.matchesUninstallCommand("quit"))
+    }
+
+    func testResultsRePrefersReasonableSizeOverUninstall() {
+        let results = AppSearch.results(query: "re", apps: [], folders: [])
+        XCTAssertFalse(results.contains { $0.kind == .uninstall })
+        XCTAssertEqual(results.first?.kind, .reasonableSize)
+    }
+
+    func testBuiltInsRankByIntentionNotInsertionOrder() {
+        // "r" matches Right Half (name prefix) and Reasonable Size (name prefix).
+        // Shorter name wins among equal prefix strength.
+        let results = AppSearch.results(query: "r", apps: [], folders: [])
+        let kinds = results.map(\.kind)
+        XCTAssertTrue(kinds.contains(.rightHalf))
+        XCTAssertTrue(kinds.contains(.reasonableSize))
+        XCTAssertEqual(results.first?.kind, .rightHalf)
+    }
+
+    func testDemotePenaltySinksItemBelowPeers() {
+        let notes = AppItem.stub(name: "Notes")
+        let notebook = AppItem.stub(name: "Notebook")
+        let demoted = AppSearch.results(
+            query: "no",
+            apps: [notes, notebook],
+            folders: [],
+            demoteLevels: [notes.id: 1]
+        )
+        XCTAssertEqual(demoted.map(\.name), ["Notebook", "Notes"])
+        // Still appears after demote.
+        XCTAssertEqual(demoted.count, 2)
     }
 
     func testResultsPutsCheckForUpdates() {

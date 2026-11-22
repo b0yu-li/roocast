@@ -21,12 +21,23 @@ enum AppSearch {
     }
 
     /// Matches as the user types toward "uninstall" / "uninstall roocast" / "remove roocast".
+    ///
+    /// `"remove roocast"` only matches once the query is at least 4 characters
+    /// (`remo…`) so short prefixes like `"re"` / `"rem"` do not false-fire
+    /// Uninstall ahead of Reasonable Size.
     nonisolated static func matchesUninstallCommand(_ query: String) -> Bool {
-        matchesBuiltInCommand(
-            query,
-            phrases: ["uninstall", "uninstall roocast", "remove roocast"],
+        let lowered = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !lowered.isEmpty else { return false }
+        if matchesBuiltInCommand(
+            lowered,
+            phrases: ["uninstall", "uninstall roocast"],
             aliases: []
-        )
+        ) {
+            return true
+        }
+        // Require enough of "remove" so "re"/"rem" never match uninstall.
+        guard lowered.count >= 4 else { return false }
+        return "remove roocast".hasPrefix(lowered)
     }
 
     /// Matches as the user types toward "left" / "left half" / alias "lh".
@@ -159,7 +170,10 @@ enum AppSearch {
         matchesBuiltInCommand(query, phrases: phrases, aliases: aliases)
     }
 
-    /// Built-in commands first (if matched), then apps + folders by `IntentionScore`.
+    /// Per-demote-level score penalty — large enough to sink below equal-intention peers.
+    nonisolated static let demotePenaltyPerLevel = 50_000
+
+    /// Built-in commands first (if matched, intention-scored), then apps + folders.
     ///
     /// Empty / whitespace query returns running-app switch suggestions (no folders/commands).
     ///
@@ -169,12 +183,14 @@ enum AppSearch {
     ///   empty-query switch suggestions. Ignored when the query is non-empty.
     /// - Parameter selfPath: Bundle path of Roocast itself — always excluded from
     ///   app rows (empty switch + typed search). Quit Roocast still matches as a command.
+    /// - Parameter demoteLevels: Persisted Decrease Ranking levels keyed by `AppItem.id`.
     nonisolated static func results(
         query: String,
         apps: [AppItem],
         folders: [AppItem]? = nil,
         frontmostPath: String? = nil,
-        selfPath: String? = nil
+        selfPath: String? = nil,
+        demoteLevels: [UUID: Int] = [:]
     ) -> [AppItem] {
         let appsExcludingSelf = excludingSelf(apps, selfPath: selfPath)
         let lowered = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -182,7 +198,8 @@ enum AppSearch {
             return switchSuggestions(
                 apps: appsExcludingSelf,
                 frontmostPath: frontmostPath,
-                selfPath: selfPath
+                selfPath: selfPath,
+                demoteLevels: demoteLevels
             )
         }
 
@@ -193,52 +210,61 @@ enum AppSearch {
         if let calc = Calculator.evaluate(query) {
             output.append(.calculator(calc))
         }
+
+        var builtIns: [AppItem] = []
         if matchesQuitCommand(lowered) {
-            output.append(.quitRoocast)
+            builtIns.append(.quitRoocast)
         }
         if matchesUninstallCommand(lowered) {
-            output.append(.uninstallRoocast)
+            builtIns.append(.uninstallRoocast)
         }
         if matchesCheckForUpdatesCommand(lowered) {
-            output.append(.checkForUpdates)
+            builtIns.append(.checkForUpdates)
         }
         if matchesLeftHalfCommand(lowered) {
-            output.append(.leftHalf)
+            builtIns.append(.leftHalf)
         }
         if matchesRightHalfCommand(lowered) {
-            output.append(.rightHalf)
+            builtIns.append(.rightHalf)
         }
         if matchesMaximizeCommand(lowered) {
-            output.append(.maximize)
+            builtIns.append(.maximize)
         }
         if matchesReasonableSizeCommand(lowered) {
-            output.append(.reasonableSize)
+            builtIns.append(.reasonableSize)
         }
         if matchesTopHalfCommand(lowered) {
-            output.append(.topHalf)
+            builtIns.append(.topHalf)
         }
         if matchesBottomHalfCommand(lowered) {
-            output.append(.bottomHalf)
+            builtIns.append(.bottomHalf)
         }
         if matchesFirstThirdCommand(lowered) {
-            output.append(.firstThird)
+            builtIns.append(.firstThird)
         }
         if matchesLastTwoThirdsCommand(lowered) {
-            output.append(.lastTwoThirds)
+            builtIns.append(.lastTwoThirds)
         }
         if matchesMoveToTopCommand(lowered) {
-            output.append(.moveToTop)
+            builtIns.append(.moveToTop)
         }
         if matchesMoveToBottomCommand(lowered) {
-            output.append(.moveToBottom)
+            builtIns.append(.moveToBottom)
         }
         if matchesMoveToLeftCommand(lowered) {
-            output.append(.moveToLeft)
+            builtIns.append(.moveToLeft)
         }
         if matchesMoveToRightCommand(lowered) {
-            output.append(.moveToRight)
+            builtIns.append(.moveToRight)
         }
-        output.append(contentsOf: rank(query: lowered, apps: appsExcludingSelf + folderItems))
+        output.append(contentsOf: rank(query: lowered, apps: builtIns, demoteLevels: demoteLevels))
+        output.append(
+            contentsOf: rank(
+                query: lowered,
+                apps: appsExcludingSelf + folderItems,
+                demoteLevels: demoteLevels
+            )
+        )
         return output
     }
 
@@ -250,13 +276,23 @@ enum AppSearch {
     }
 
     /// Rank items by intention score (prefix > mid-string); ties break by name.
-    nonisolated static func rank(query: String, apps: [AppItem]) -> [AppItem] {
+    /// Demote levels subtract `demotePenaltyPerLevel` each so user-demoted rows sink.
+    nonisolated static func rank(
+        query: String,
+        apps: [AppItem],
+        demoteLevels: [UUID: Int] = [:]
+    ) -> [AppItem] {
         let lowered = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !lowered.isEmpty else { return [] }
 
         return apps
-            .map { ($0, IntentionScore.score(query: lowered, app: $0)) }
-            .filter { $0.1 > 0 }
+            .compactMap { app -> (AppItem, Int)? in
+                let base = IntentionScore.score(query: lowered, app: app)
+                guard base > 0 else { return nil }
+                let demote = max(0, demoteLevels[app.id] ?? 0)
+                // Penalty may go negative — item still appears; sort sinks it.
+                return (app, base - demote * demotePenaltyPerLevel)
+            }
             .sorted { lhs, rhs in
                 if lhs.1 != rhs.1 { return lhs.1 > rhs.1 }
                 return lhs.0.name.localizedCaseInsensitiveCompare(rhs.0.name) == .orderedAscending
@@ -268,16 +304,20 @@ enum AppSearch {
     nonisolated static func switchSuggestions(
         apps: [AppItem],
         frontmostPath: String? = nil,
-        selfPath: String? = nil
+        selfPath: String? = nil,
+        demoteLevels: [UUID: Int] = [:]
     ) -> [AppItem] {
         apps
-            .map {
-                (
-                    $0,
-                    IntentionScore.switchScore(app: $0, frontmostPath: frontmostPath, selfPath: selfPath)
+            .compactMap { app -> (AppItem, Int)? in
+                let base = IntentionScore.switchScore(
+                    app: app,
+                    frontmostPath: frontmostPath,
+                    selfPath: selfPath
                 )
+                guard base > 0 else { return nil }
+                let demote = max(0, demoteLevels[app.id] ?? 0)
+                return (app, base - demote * demotePenaltyPerLevel)
             }
-            .filter { $0.1 > 0 }
             .sorted { lhs, rhs in
                 if lhs.1 != rhs.1 { return lhs.1 > rhs.1 }
                 return lhs.0.name.localizedCaseInsensitiveCompare(rhs.0.name) == .orderedAscending

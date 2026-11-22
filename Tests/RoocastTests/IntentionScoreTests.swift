@@ -44,6 +44,28 @@ final class IntentionScoreTests: XCTestCase {
         XCTAssertEqual(personal, 0)
     }
 
+    func testOrderedWordPrefixSkipsFiller() {
+        // "move left" should match "Move to Left" by skipping "to".
+        let moveLeft = IntentionScore.score(
+            query: "move left",
+            name: "Move to Left",
+            searchText: "Move to Left mtl"
+        )
+        XCTAssertGreaterThan(moveLeft, 0)
+        // Single-token "left" still prefers a direct word/name prefix (Left Half).
+        let leftHalf = IntentionScore.score(
+            query: "left",
+            name: "Left Half",
+            searchText: "Left Half lh left"
+        )
+        let moveViaLeft = IntentionScore.score(
+            query: "left",
+            name: "Move to Left",
+            searchText: "Move to Left mtl"
+        )
+        XCTAssertGreaterThan(leftHalf, moveViaLeft)
+    }
+
     func testScoreViaAppItem() {
         let notes = AppItem.stub(name: "Notes")
         let keynote = AppItem.stub(name: "Keynote")

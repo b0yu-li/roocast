@@ -148,7 +148,7 @@ struct AppItem: Identifiable, Hashable {
             icon: icon,
             isRunning: false,
             profile: nil,
-            aliases: [],
+            aliases: ["uninstall", "remove roocast"],
             kind: .uninstall
         )
     }()
@@ -180,7 +180,7 @@ struct AppItem: Identifiable, Hashable {
         )
         icon?.size = NSSize(width: 32, height: 32)
         return AppItem(
-            id: UUID(uuidString: "C3D4E5F6-A7B8-9012-CDEF-123456789012")!,
+            id: UUID(uuidString: "1A2B3C4D-5E6F-7081-9A0B-1C2D3E4F5061")!,
             name: "Right Half",
             path: "Command",
             icon: icon,
@@ -199,7 +199,7 @@ struct AppItem: Identifiable, Hashable {
         )
         icon?.size = NSSize(width: 32, height: 32)
         return AppItem(
-            id: UUID(uuidString: "D4E5F6A7-B8C9-0123-DEF0-234567890123")!,
+            id: UUID(uuidString: "2B3C4D5E-6F70-8192-A0B1-C2D3E4F50617")!,
             name: "Maximize",
             path: "Command",
             icon: icon,
@@ -224,7 +224,7 @@ struct AppItem: Identifiable, Hashable {
             icon: icon,
             isRunning: false,
             profile: nil,
-            aliases: ["rs"],
+            aliases: ["rs", "reasonable", "reasonable size"],
             kind: .reasonableSize
         )
     }()
@@ -448,16 +448,20 @@ struct AppItem: Identifiable, Hashable {
     }
 
     /// Lightweight item for unit tests / ranking — no disk icon lookup.
+    ///
+    /// The default path includes `name`, so two stubs are different rows.
+    /// A shared path would share `stableID` and a demote on one would hit both.
     static func stub(
         name: String,
         profile: String? = nil,
-        path: String = "/Applications/Stub.app",
+        path: String? = nil,
         isRunning: Bool = false
     ) -> AppItem {
-        AppItem(
-            id: stableID(path: path, profile: profile),
+        let resolvedPath = path ?? "/Applications/\(name).app"
+        return AppItem(
+            id: stableID(path: resolvedPath, profile: profile),
             name: name,
-            path: path,
+            path: resolvedPath,
             icon: nil,
             isRunning: isRunning,
             profile: profile,

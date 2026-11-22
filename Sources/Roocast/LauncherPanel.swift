@@ -3,6 +3,8 @@ import AppKit
 
 final class LauncherPanel: FloatingPanel {
     let navigationState: NavigationState
+    let menuModel = LauncherActionsModel()
+    let rankPreferences = SearchRankPreferences()
 
     init(navigationState: NavigationState) {
         self.navigationState = navigationState
@@ -15,6 +17,8 @@ final class LauncherPanel: FloatingPanel {
         installHostingController(
             ContentView(
                 navigationState: navigationState,
+                menuModel: menuModel,
+                rankPreferences: rankPreferences,
                 onDismiss: { [weak self] in
                     // Launch path: target app activates itself.
                     self?.hide(restoreFocus: false)
@@ -24,10 +28,24 @@ final class LauncherPanel: FloatingPanel {
                 }
             )
         )
+        // ⌘K toggles the actions menu (Open / Decrease Ranking).
+        onCommandK = { [weak self] in
+            self?.menuModel.toggle()
+        }
+        // While the menu is up, keys route to the menu.
+        onMenuKey = { [weak self] keyCode in
+            guard let self else { return false }
+            return self.menuModel.handleKey(keyCode)
+        }
     }
 
     func show() {
         super.show(afterBecomeKey: nil)
+    }
+
+    override func hide(restoreFocus: Bool) {
+        menuModel.close()
+        super.hide(restoreFocus: restoreFocus)
     }
 
     /// Tinycast hand-off: remember the prior app, hide (restore focus if we stole it),
