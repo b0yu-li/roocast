@@ -415,7 +415,7 @@ struct AppItem: Identifiable, Hashable {
             path: "Countdown",
             icon: icon,
             isRunning: false,
-            profile: "Start countdown",
+            profile: "Esc cancels",
             aliases: [],
             kind: .countdown(seconds: spec.seconds)
         )
