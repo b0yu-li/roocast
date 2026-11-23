@@ -7,8 +7,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "${ROOT}"
 
+# Official identifiers / feed URLs / update public key — gitignored Scripts/identity.env
+# shellcheck disable=SC1091
+source "${ROOT}/Scripts/load-identity.sh"
+
 APP_NAME="Roocast"
-BUNDLE_ID="com.example.roocast"
 INSTALL_DIR="/Applications"
 BUILD_DIR=".build/release"
 BUNDLE_NAME="${APP_NAME}.app"
@@ -110,6 +113,12 @@ cat > "${BUILD_DIR}/${BUNDLE_NAME}/Contents/Info.plist" << EOF
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>RoocastUpdateFeedURL</key>
+    <string>${UPDATE_FEED_URL}</string>
+    <key>RoocastUpdateSiteURL</key>
+    <string>${UPDATE_SITE_URL}</string>
+    <key>RoocastUpdatePublicKey</key>
+    <string>${UPDATE_PUBLIC_KEY_B64}</string>
 </dict>
 </plist>
 EOF

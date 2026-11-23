@@ -18,6 +18,9 @@ DerivedData/
 # Maintainer-only ops notes (Team ID, notary paths, CF account)
 /docs/DISTRIBUTION.private.md
 
+# Official bundle id / feed URLs / update public key for packaging (never commit)
+/Scripts/identity.env
+
 # Icon generator venv (Pillow/numpy)
 /.venv/
 **/__pycache__/
@@ -30,3 +33,4 @@ DerivedData/
 # Release artifacts (DMG / checksums / staging)
 /dist/
 
+.update-keys/

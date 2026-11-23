@@ -14,8 +14,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}"
 
+# Official identifiers / feed URLs / update public key — gitignored Scripts/identity.env
+# shellcheck disable=SC1091
+source "${ROOT}/Scripts/load-identity.sh"
+
 APP_NAME="Roocast"
-BUNDLE_ID="com.example.roocast"
 BUILD_DIR=".build/release"
 DIST_DIR="dist"
 BUNDLE_NAME="${APP_NAME}.app"
@@ -118,9 +121,19 @@ cat > "${APP_PATH}/Contents/Info.plist" << EOF
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>RoocastUpdateFeedURL</key>
+    <string>${UPDATE_FEED_URL}</string>
+    <key>RoocastUpdateSiteURL</key>
+    <string>${UPDATE_SITE_URL}</string>
+    <key>RoocastUpdatePublicKey</key>
+    <string>${UPDATE_PUBLIC_KEY_B64}</string>
 </dict>
 </plist>
 EOF
+
+if [ -z "${UPDATE_FEED_URL}" ] || [ -z "${UPDATE_PUBLIC_KEY_B64}" ]; then
+    echo "⚠️  UPDATE_FEED_URL / UPDATE_PUBLIC_KEY_B64 empty — in-app updates will fail closed on this build." >&2
+fi
 
 echo "🔏 Signing with ${IDENTITY_LABEL:-$IDENTITY} (hardened runtime)..."
 codesign --force --options runtime --timestamp \
@@ -165,12 +178,58 @@ else
     xcrun stapler validate "${DMG_PATH}"
 fi
 
-shasum -a 256 "${DMG_PATH}" | tee "${DMG_PATH}.sha256"
+SHA256="$(shasum -a 256 "${DMG_PATH}" | tee "${DMG_PATH}.sha256" | awk '{print $1}')"
+if [ -z "${UPDATE_DMG_BASE}" ]; then
+    echo "❌ UPDATE_DMG_BASE unset in Scripts/identity.env — cannot sign feed URL." >&2
+    exit 1
+fi
+DMG_URL_DEFAULT="${UPDATE_DMG_BASE%/}/${DMG_NAME}"
+
+# Ed25519 feed signature (private key never in git — see docs/DISTRIBUTION.private.md).
+UPDATE_KEY_CANDIDATES=(
+    "${ROOCAST_UPDATE_ED25519_KEY:-}"
+    "${HOME}/Library/Application Support/Roocast/notary/update-ed25519-private.pem"
+    "${ROOT}/.update-keys/update-ed25519-private.pem"
+)
+UPDATE_KEY=""
+for candidate in "${UPDATE_KEY_CANDIDATES[@]}"; do
+    if [ -n "${candidate}" ] && [ -f "${candidate}" ]; then
+        UPDATE_KEY="${candidate}"
+        break
+    fi
+done
+
+FEED_JSON="${DIST_DIR}/Roocast-${VERSION}.feed.json"
+if [ -n "${UPDATE_KEY}" ]; then
+    MSG_FILE="$(mktemp)"
+    SIG_FILE="$(mktemp)"
+    printf 'roocast-update-v1\n%s\n%s\n%s' "${VERSION}" "${SHA256}" "${DMG_URL_DEFAULT}" > "${MSG_FILE}"
+    openssl pkeyutl -sign -inkey "${UPDATE_KEY}" -in "${MSG_FILE}" -out "${SIG_FILE}"
+    ED25519_B64="$(base64 < "${SIG_FILE}" | tr -d '\n')"
+    rm -f "${MSG_FILE}" "${SIG_FILE}"
+    cat > "${FEED_JSON}" << EOF
+{
+  "version": "${VERSION}",
+  "dmg_url": "${DMG_URL_DEFAULT}",
+  "sha256": "${SHA256}",
+  "ed25519": "${ED25519_B64}",
+  "released": "$(date -u +%Y-%m-%d)"
+}
+EOF
+    echo "✍️  Wrote feed fragment ${FEED_JSON}"
+else
+    echo "⚠️  No Ed25519 private key found — skipped feed signature." >&2
+    echo "   Place PEM at ~/Library/Application Support/Roocast/notary/update-ed25519-private.pem" >&2
+    echo "   (or .update-keys/update-ed25519-private.pem / ROOCAST_UPDATE_ED25519_KEY)." >&2
+fi
 
 echo "✅ Release ready:"
 echo "   ${DMG_PATH}"
 echo "   ${DMG_PATH}.sha256"
+if [ -f "${FEED_JSON}" ]; then
+    echo "   ${FEED_JSON}  (copy into product-site roocast/latest.json)"
+fi
 if [ "${SKIP_NOTARIZE}" -eq 0 ]; then
     echo "   Gatekeeper: notarized + stapled"
 fi
-echo "ℹ️  After install, re-grant Accessibility once (new bundle id ${BUNDLE_ID})."
+echo "ℹ️  After install, re-grant Accessibility once if the bundle id changed."

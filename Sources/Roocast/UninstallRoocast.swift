@@ -6,8 +6,6 @@ import Foundation
 /// Preserves `~/Library/Application Support/Roocast/notary/` so a maintainer
 /// machine does not lose Apple API keys when dogfooding this command.
 enum UninstallRoocast {
-    private static let bundleID = "com.example.roocast"
-
     /// Paths removed on uninstall (aligned with the Homebrew cask `zap`).
     nonisolated static func dataURLs(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [URL] {
         [
@@ -47,8 +45,12 @@ enum UninstallRoocast {
     }
 
     /// Testable core: remove data dirs + trash (or delete) the app bundle.
+    ///
+    /// - Parameter expectedBundleID: Defaults to the running app’s id so source
+    ///   never hardcodes a shipping identifier.
     nonisolated static func performUninstall(
         bundleURL: URL,
+        expectedBundleID: String? = Bundle.main.bundleIdentifier,
         fileManager: FileManager = .default
     ) -> [String] {
         var errors: [String] = []
@@ -59,8 +61,13 @@ enum UninstallRoocast {
         guard let id = Bundle(url: bundleURL)?.bundleIdentifier else {
             return ["Refusing to remove \(bundleURL.path) — could not read bundle id."]
         }
-        guard id == bundleID else {
-            return ["Refusing to remove \(bundleURL.path) — bundle id is \(id), expected \(bundleID)."]
+        guard let expectedBundleID else {
+            return ["Refusing to remove \(bundleURL.path) — no expected bundle id."]
+        }
+        guard id == expectedBundleID else {
+            return [
+                "Refusing to remove \(bundleURL.path) — bundle id is \(id), expected \(expectedBundleID)."
+            ]
         }
 
         for url in dataURLs(home: fileManager.homeDirectoryForCurrentUser) {
