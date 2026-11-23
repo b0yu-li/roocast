@@ -21,6 +21,8 @@ struct AppItem: Identifiable, Hashable {
         case reasonableSize
         /// Lead calculator row — Enter copies `copyText`.
         case calculator(copyText: String)
+        /// Lead countdown row — Enter starts the island for `seconds`.
+        case countdown(seconds: Int)
     }
 
     let id: UUID
@@ -397,6 +399,25 @@ struct AppItem: Identifiable, Hashable {
             profile: result.expression,
             aliases: [],
             kind: .calculator(copyText: result.copyText)
+        )
+    }
+
+    /// Lead countdown row — `name` is formatted remaining (`5:00`); Enter starts the island.
+    static func countdown(_ spec: Countdown.Spec) -> AppItem {
+        let icon = NSImage(
+            systemSymbolName: "timer",
+            accessibilityDescription: "Countdown"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        return AppItem(
+            id: nameBasedUUID("roocast.countdown:\(spec.seconds)"),
+            name: spec.display,
+            path: "Countdown",
+            icon: icon,
+            isRunning: false,
+            profile: "Start countdown",
+            aliases: [],
+            kind: .countdown(seconds: spec.seconds)
         )
     }
 

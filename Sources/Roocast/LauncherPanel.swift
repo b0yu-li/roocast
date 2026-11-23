@@ -5,6 +5,8 @@ final class LauncherPanel: FloatingPanel {
     let navigationState: NavigationState
     let menuModel = LauncherActionsModel()
     let rankPreferences = SearchRankPreferences()
+    /// AppDelegate owns the island so it survives launcher hide.
+    var onCountdown: ((Int) -> Void)?
 
     init(navigationState: NavigationState) {
         self.navigationState = navigationState
@@ -25,6 +27,9 @@ final class LauncherPanel: FloatingPanel {
                 },
                 onWindowSnap: { [weak self] command in
                     self?.performWindowSnap(command)
+                },
+                onCountdown: { [weak self] seconds in
+                    self?.onCountdown?(seconds)
                 }
             )
         )

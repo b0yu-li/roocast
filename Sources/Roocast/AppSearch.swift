@@ -206,6 +206,10 @@ enum AppSearch {
         let folderItems = folders ?? FolderShortcut.builtIns.map { AppItem.folder($0) }
 
         var output: [AppItem] = []
+        // Countdown / timer CLI leads when the query parses (`timer 5m`).
+        if let countdown = Countdown.parse(query) {
+            output.append(.countdown(countdown))
+        }
         // Calculator leads when the raw query is a real expression (Tinycast-style).
         if let calc = Calculator.evaluate(query) {
             output.append(.calculator(calc))

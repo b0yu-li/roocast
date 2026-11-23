@@ -16,6 +16,7 @@ struct Roocast {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: LauncherPanel?
     private var clipboardPanel: ClipboardPanel?
+    private var countdownIsland: CountdownIslandPanel?
     private var hotKeyManager: HotKeyManager?
     private var textExpander: TextExpander?
     private var appToggleMonitor: AppToggleMonitor?
@@ -38,6 +39,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        countdownIsland?.cancel()
+        countdownIsland = nil
         appToggleMonitor?.stop()
         appToggleMonitor = nil
         textExpander?.stop()
@@ -47,8 +50,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupPanel() {
         let panel = LauncherPanel(navigationState: navigationState)
+        panel.onCountdown = { [weak self] seconds in
+            self?.startCountdown(seconds: seconds)
+        }
         wireNavigation(panel, state: navigationState, enterNotification: .launchSelectedApp)
         self.panel = panel
+    }
+
+    private func startCountdown(seconds: Int) {
+        let island = countdownIsland ?? CountdownIslandPanel()
+        countdownIsland = island
+        island.start(seconds: seconds)
     }
 
     private func setupClipboardPanel() {

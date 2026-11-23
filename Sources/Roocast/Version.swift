@@ -3,8 +3,8 @@ import Foundation
 // Auto-generated version file
 struct AppVersion {
     static let major = 0
-    static let minor = 11
-    static let patch = 2
+    static let minor = 12
+    static let patch = 0
     
     static var string: String {
         "\(major).\(minor).\(patch)"

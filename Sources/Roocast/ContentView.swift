@@ -21,6 +21,8 @@ struct ContentView: View {
     let onDismiss: () -> Void
     /// Snap/maximize the prior focused window. Panel supplies AX target.
     var onWindowSnap: ((WindowSnap.Command) -> Void)? = nil
+    /// Start (or replace) the Dynamic Island countdown pill.
+    var onCountdown: ((Int) -> Void)? = nil
 
     var filteredApps: [AppItem] {
         appIndex.search(query, demoteLevels: rankPreferences.demoteLevels)
@@ -299,6 +301,13 @@ struct ContentView: View {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(copyText, forType: .string)
             query = ""
+            onDismiss()
+            return
+        }
+
+        if case .countdown(let seconds) = app.kind {
+            query = ""
+            onCountdown?(seconds)
             onDismiss()
             return
         }
