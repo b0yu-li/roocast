@@ -12,7 +12,7 @@ enum LauncherLayout {
 }
 
 struct ContentView: View {
-    @State private var query = ""
+    @ObservedObject var searchSession: SearchSession
     @ObservedObject var navigationState: NavigationState
     @ObservedObject var menuModel: LauncherActionsModel
     @ObservedObject var rankPreferences: SearchRankPreferences
@@ -25,7 +25,22 @@ struct ContentView: View {
     var onCountdown: ((Int) -> Void)? = nil
 
     var filteredApps: [AppItem] {
-        appIndex.search(query, demoteLevels: rankPreferences.demoteLevels)
+        appIndex.search(searchSession.searchQuery, demoteLevels: rankPreferences.demoteLevels)
+    }
+
+    private var fieldText: Binding<String> {
+        Binding(
+            get: {
+                searchSession.lockedVerb == nil ? searchSession.query : searchSession.argument
+            },
+            set: { newValue in
+                if searchSession.lockedVerb == nil {
+                    searchSession.query = newValue
+                } else {
+                    searchSession.argument = newValue
+                }
+            }
+        )
     }
 
     private var menuHeight: CGFloat {
@@ -70,6 +85,7 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .launcherWillShow)) { _ in
             menuModel.close()
+            searchSession.clear()
             // Reset selection immediately; after reindex only refresh bounds so ↑/↓
             // during the scan is not yanked back to row 0.
             navigationState.sync(itemCount: filteredApps.count)
@@ -81,12 +97,14 @@ struct ContentView: View {
                 isSearchFocused = true
             }
         }
-        .onChange(of: query) { _, newQuery in
-            // Async zoxide — must not run inside `filteredApps` / body (Process nested
-            // the run loop during layout and SIGABRT'd AttributeGraph).
-            appIndex.scheduleZoxide(for: newQuery)
-            navigationState.sync(itemCount: filteredApps.count)
-            if menuModel.isOpen { menuModel.close() }
+        .onChange(of: searchSession.query) { _, _ in
+            refreshAfterQueryChange()
+        }
+        .onChange(of: searchSession.argument) { _, _ in
+            refreshAfterQueryChange()
+        }
+        .onChange(of: searchSession.lockedVerb) { _, _ in
+            refreshAfterQueryChange()
         }
         // Empty-summon list appears when indexing finishes — query never changes, so
         // refresh arrow bounds whenever the index updates.
@@ -110,13 +128,27 @@ struct ContentView: View {
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(isSearchFocused ? Color.accentColor : .secondary)
 
-            SearchField(text: $query, onSubmit: {
-                launchSelectedApp()
-            })
+            if let lockedVerb = searchSession.lockedVerb {
+                Text(lockedVerb)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.accentColor))
+                    .accessibilityLabel("Locked command \(lockedVerb)")
+            }
+
+            SearchField(
+                text: fieldText,
+                placeholder: searchSession.fieldPlaceholder,
+                onSubmit: { launchSelectedApp() },
+                onComplete: { searchSession.tryLockCommand() },
+                onBackspaceWhenEmpty: { searchSession.unlockCommand() }
+            )
             .frame(height: 28)
 
-            if !query.isEmpty {
-                Button(action: { query = "" }) {
+            if searchSession.showsClearButton {
+                Button(action: { searchSession.clear() }) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(.tertiary)
@@ -128,6 +160,14 @@ struct ContentView: View {
         .padding(.vertical, 10)
     }
 
+    private func refreshAfterQueryChange() {
+        // Async zoxide — must not run inside `filteredApps` / body (Process nested
+        // the run loop during layout and SIGABRT'd AttributeGraph).
+        appIndex.scheduleZoxide(for: searchSession.searchQuery)
+        navigationState.sync(itemCount: filteredApps.count)
+        if menuModel.isOpen { menuModel.close() }
+    }
+
     private var resultsArea: some View {
         ZStack {
             ScrollViewReader { proxy in
@@ -135,10 +175,10 @@ struct ContentView: View {
                     LazyVStack(spacing: 1) {
                         if filteredApps.isEmpty {
                             VStack(spacing: 6) {
-                                Image(systemName: query.isEmpty ? "keyboard" : "magnifyingglass")
+                                Image(systemName: searchSession.searchQuery.isEmpty ? "keyboard" : "magnifyingglass")
                                     .font(.system(size: 22, weight: .light))
                                     .foregroundStyle(.tertiary)
-                                Text(query.isEmpty ? "Start typing to search…" : "No results")
+                                Text(searchSession.searchQuery.isEmpty ? "Start typing to search…" : "No results")
                                     .font(.system(size: 13))
                                     .foregroundStyle(.tertiary)
                             }
@@ -300,26 +340,26 @@ struct ContentView: View {
         if case .calculator(let copyText) = app.kind {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(copyText, forType: .string)
-            query = ""
+            searchSession.clear()
             onDismiss()
             return
         }
 
         if case .countdown(let seconds) = app.kind {
-            query = ""
+            searchSession.clear()
             onCountdown?(seconds)
             onDismiss()
             return
         }
 
         if app.kind == .quit {
-            query = ""
+            searchSession.clear()
             NSApplication.shared.terminate(nil)
             return
         }
 
         if app.kind == .checkForUpdates {
-            query = ""
+            searchSession.clear()
             onDismiss()
             Task { @MainActor in
                 let outcome = await UpdateCheck.check()
@@ -329,87 +369,87 @@ struct ContentView: View {
         }
 
         if app.kind == .uninstall {
-            query = ""
+            searchSession.clear()
             onDismiss()
             UninstallRoocast.run()
             return
         }
 
         if app.kind == .leftHalf {
-            query = ""
+            searchSession.clear()
             onWindowSnap?(.left)
             return
         }
 
         if app.kind == .rightHalf {
-            query = ""
+            searchSession.clear()
             onWindowSnap?(.right)
             return
         }
 
         if app.kind == .maximize {
-            query = ""
+            searchSession.clear()
             onWindowSnap?(.maximize)
             return
         }
 
         if app.kind == .reasonableSize {
-            query = ""
+            searchSession.clear()
             onWindowSnap?(.reasonableSize)
             return
         }
 
         if app.kind == .topHalf {
-            query = ""
+            searchSession.clear()
             onWindowSnap?(.top)
             return
         }
 
         if app.kind == .bottomHalf {
-            query = ""
+            searchSession.clear()
             onWindowSnap?(.bottom)
             return
         }
 
         if app.kind == .firstThird {
-            query = ""
+            searchSession.clear()
             onWindowSnap?(.firstThird)
             return
         }
 
         if app.kind == .lastTwoThirds {
-            query = ""
+            searchSession.clear()
             onWindowSnap?(.lastTwoThirds)
             return
         }
 
         if app.kind == .moveToTop {
-            query = ""
+            searchSession.clear()
             onWindowSnap?(.moveToTop)
             return
         }
 
         if app.kind == .moveToBottom {
-            query = ""
+            searchSession.clear()
             onWindowSnap?(.moveToBottom)
             return
         }
 
         if app.kind == .moveToLeft {
-            query = ""
+            searchSession.clear()
             onWindowSnap?(.moveToLeft)
             return
         }
 
         if app.kind == .moveToRight {
-            query = ""
+            searchSession.clear()
             onWindowSnap?(.moveToRight)
             return
         }
 
         if app.kind == .folder {
             NSWorkspace.shared.open(URL(fileURLWithPath: app.path, isDirectory: true))
-            query = ""
+            searchSession.clear()
             onDismiss()
             return
         }
@@ -423,7 +463,7 @@ struct ContentView: View {
         }
 
         // Clear so the next open starts with an empty search field
-        query = ""
+        searchSession.clear()
         onDismiss()
     }
 }

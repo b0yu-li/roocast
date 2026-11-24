@@ -50,6 +50,12 @@ patch = re.search(r"static let patch = (\d+)", text).group(1)
 print(f"{major}.{minor}.{patch}")
 PY
 )
+BUILD=$(python3 - <<'PY'
+import re, pathlib
+text = pathlib.Path("Sources/Roocast/Version.swift").read_text()
+print(re.search(r"static let build = (\d+)", text).group(1))
+PY
+)
 
 DMG_NAME="${APP_NAME}-${VERSION}.dmg"
 APP_PATH="${DIST_DIR}/${BUNDLE_NAME}"
@@ -112,7 +118,7 @@ cat > "${APP_PATH}/Contents/Info.plist" << EOF
     <key>CFBundleShortVersionString</key>
     <string>${VERSION}</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>${BUILD}</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>LSMinimumSystemVersion</key>

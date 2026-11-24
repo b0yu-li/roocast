@@ -13,6 +13,8 @@ class FloatingPanel: NSPanel {
     /// While the actions menu is up, navigation keys route to the menu; return true
     /// if consumed, false to let the key fall through to the search field.
     var onMenuKey: ((UInt16) -> Bool)?
+    /// Esc before hide — return true if consumed (e.g. unlock command chip).
+    var onEscape: (() -> Bool)?
 
     /// Prior app captured at show — must be **strong**.
     /// A weak `NSRunningApplication` from `frontmostApplication` often deallocates
@@ -254,6 +256,7 @@ class FloatingPanel: NSPanel {
                     onEnter?()
                     return
                 case KeyCode.escape:
+                    if onEscape?() == true { return }
                     hide(restoreFocus: true)
                     return
                 default:

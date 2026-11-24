@@ -6,6 +6,10 @@ struct SearchField: NSViewRepresentable {
     var placeholder: String = "Search apps, files, commands…"
     var fontSize: CGFloat = 18
     var onSubmit: () -> Void
+    /// Tab / → at end of text — return true if the parent consumed the key (command lock).
+    var onComplete: (() -> Bool)? = nil
+    /// Backspace/delete when the field is empty — return true if consumed (unlock chip).
+    var onBackspaceWhenEmpty: (() -> Bool)? = nil
 
     func makeNSView(context: Context) -> CustomTextField {
         let textField = CustomTextField()
@@ -42,6 +46,12 @@ struct SearchField: NSViewRepresentable {
         textField.onEnterKey = {
             coordinator.parent.onSubmit()
         }
+        textField.onComplete = {
+            coordinator.parent.onComplete?() ?? false
+        }
+        textField.onBackspaceWhenEmpty = {
+            coordinator.parent.onBackspaceWhenEmpty?() ?? false
+        }
     }
 
     class Coordinator: NSObject, NSTextFieldDelegate {
@@ -57,7 +67,7 @@ struct SearchField: NSViewRepresentable {
             }
         }
 
-        /// Field editor path — Return often never hits `CustomTextField.keyDown`.
+        /// Field editor path — Return / Tab / arrows often never hit `CustomTextField.keyDown`.
         func control(
             _ control: NSControl,
             textView: NSTextView,
@@ -75,6 +85,25 @@ struct SearchField: NSViewRepresentable {
                 NotificationCenter.default.post(name: .arrowDownPressed, object: nil)
                 return true
             }
+            if commandSelector == #selector(NSResponder.insertTab(_:))
+                || commandSelector == #selector(NSResponder.insertTabIgnoringFieldEditor(_:))
+            {
+                return parent.onComplete?() ?? false
+            }
+            if commandSelector == #selector(NSResponder.moveRight(_:)) {
+                // Only complete when the caret is at the end (otherwise move normally).
+                let selected = textView.selectedRange()
+                if selected.length == 0, selected.location == textView.string.utf16.count {
+                    if parent.onComplete?() == true { return true }
+                }
+                return false
+            }
+            if commandSelector == #selector(NSResponder.deleteBackward(_:)) {
+                if textView.string.isEmpty {
+                    return parent.onBackspaceWhenEmpty?() ?? false
+                }
+                return false
+            }
             return false
         }
     }
@@ -84,6 +113,8 @@ class CustomTextField: NSTextField {
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onEnterKey: (() -> Void)?
+    var onComplete: (() -> Bool)?
+    var onBackspaceWhenEmpty: (() -> Bool)?
 
     override func keyDown(with event: NSEvent) {
         switch event.keyCode {
@@ -93,6 +124,22 @@ class CustomTextField: NSTextField {
             onArrowDown?()
         case KeyCode.returnKey, KeyCode.keypadEnter:
             onEnterKey?()
+        case KeyCode.tab:
+            if onComplete?() == true { return }
+            super.keyDown(with: event)
+        case KeyCode.rightArrow:
+            if let editor = currentEditor() as? NSTextView {
+                let selected = editor.selectedRange()
+                if selected.length == 0, selected.location == editor.string.utf16.count,
+                   onComplete?() == true
+                {
+                    return
+                }
+            }
+            super.keyDown(with: event)
+        case KeyCode.delete:
+            if stringValue.isEmpty, onBackspaceWhenEmpty?() == true { return }
+            super.keyDown(with: event)
         default:
             super.keyDown(with: event)
         }
@@ -135,4 +182,10 @@ class CustomTextField: NSTextField {
 extension Notification.Name {
     static let arrowUpPressed = Notification.Name("arrowUpPressed")
     static let arrowDownPressed = Notification.Name("arrowDownPressed")
+}
+
+extension KeyCode {
+    static let tab: UInt16 = 48
+    static let rightArrow: UInt16 = 124
+    static let delete: UInt16 = 51
 }

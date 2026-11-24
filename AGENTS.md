@@ -126,7 +126,7 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 - **Launcher** — ⌘Space summons app/folder search (global hotkey).
 - **Clipboard history** — ⌘Esc summons recent pasteboard items (global hotkey, same process). Text + images (Finder image files from disk, or inline PNG/TIFF → owned PNG blobs); list + preview split pane; no OCR / non-image file gallery yet.
 - **Calculator (math)** — type an expression (`2+2`, `sqrt(9)`, `10% of 50`); a lead result row appears; Enter copies the answer. Tinycast-inspired, math-only (no units/currency/history yet).
-- **Countdown (ad-hoc)** — type `timer 5m` / `countdown 90s` (CLI-style); Enter starts a Dynamic Island–like floating pill with the remaining time. One active countdown; pass-through overlay (apps underneath stay usable); Esc cancels; sound when done.
+- **Countdown (ad-hoc)** — type `tim` + Tab to lock `timer` (or `countdown`), then a duration (`2h`); Enter starts a Dynamic Island–like floating pill. One active countdown; hover the pill for × to cancel (Esc does not); sound when done.
 - **Zoxide jump** — type `z <keywords>` (e.g. `z downloads`); best frecent match via the `zoxide` CLI opens in Finder on Enter. Requires `zoxide` on the Mac (Homebrew path resolved explicitly for GUI apps).
 - **Window snap (minimal)** — built-in commands for left / right / top / bottom half, first third / last two thirds, move to top / bottom / left / right (keep size, flush to edge), maximize (fill visible frame in the current Space — not macOS fullscreen) / reasonable size (~60% centered, Tinycast-style). Accessibility. Grow only with deliberate, small additions.
 - **Text expander (PoC)** — system-wide `$time` → `yyyy-MM-dd HH:mm` (Tinycast-style CGEvent tap). Accessibility. No snippet UI / marketplace yet.
@@ -136,7 +136,7 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 
 - Not a full window manager (no tiling layouts, grids, or multi-monitor choreography — use Rectangle or Magnet for that)
 - Not a full calculator suite (math only — no unit/currency conversion or calc history UI yet; Tinycast does those)
-- Not a full timer / Pomodoro suite (ad-hoc one-shot countdown island only — no history, presets marketplace, or multiple concurrent timers)
+- Not a full timer / Pomodoro suite (ad-hoc one-shot countdown island only — hover × to cancel; no Esc-cancel, history, presets marketplace, or multiple concurrent timers)
 - Not a full snippet manager (PoC `$time` only — no editor, sync, or Raycast import yet)
 - Not a zoxide UI / DB editor (CLI match only — no interactive picker, import, or score editing)
 - Not a Hyper key / Karabiner replacement (a few Left-Control app toggles only — no caps-lock remap or system-wide layers)

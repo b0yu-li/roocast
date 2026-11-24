@@ -5,6 +5,7 @@ final class LauncherPanel: FloatingPanel {
     let navigationState: NavigationState
     let menuModel = LauncherActionsModel()
     let rankPreferences = SearchRankPreferences()
+    let searchSession = SearchSession()
     /// AppDelegate owns the island so it survives launcher hide.
     var onCountdown: ((Int) -> Void)?
 
@@ -18,6 +19,7 @@ final class LauncherPanel: FloatingPanel {
 
         installHostingController(
             ContentView(
+                searchSession: searchSession,
                 navigationState: navigationState,
                 menuModel: menuModel,
                 rankPreferences: rankPreferences,
@@ -41,6 +43,15 @@ final class LauncherPanel: FloatingPanel {
         onMenuKey = { [weak self] keyCode in
             guard let self else { return false }
             return self.menuModel.handleKey(keyCode)
+        }
+        // Esc: close ⌘K menu → unlock command chip → then hide panel.
+        onEscape = { [weak self] in
+            guard let self else { return false }
+            if self.menuModel.isOpen {
+                self.menuModel.close()
+                return true
+            }
+            return self.searchSession.unlockCommand()
         }
     }
 
