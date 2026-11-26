@@ -2,22 +2,26 @@ import AppKit
 
 /// Notch-adjacent floating pill showing an ad-hoc countdown (Dynamic Island–like).
 ///
-/// Nonactivating overlay (never key). Hover reveals a close button; no Esc cancel
-/// (so launcher ⌘K → Esc cannot kill the timer). One active countdown at a time.
+/// Compact centered digits (AC1/AC2). Hover/drag shows an overlay × on the top-left
+/// corner without reflowing text (AC3). Grab-offset drag with no drift (AC4).
+/// Nonactivating / never key (AC5).
 @MainActor
 final class CountdownIslandPanel: NSPanel {
-    private let root = HoverRootView(frame: .zero)
+    private let root = PillRootView(frame: .zero)
+    private let pillView = NSView(frame: .zero)
     private let timeLabel = NSTextField(labelWithString: "0:00")
     private let closeButton = NSButton(frame: .zero)
     private var tick: Timer?
     private var remaining = 0
     private var total = 0
-    private let collapsedSize = NSSize(width: 120, height: 36)
-    private let expandedSize = NSSize(width: 148, height: 36)
+    private var grabOffset: CGPoint?
+    /// Keep × visible while dragging even if the cursor briefly leaves the chrome.
+    private var isDragging = false
 
     init() {
+        let chrome = CountdownIslandLayout.chromeSize
         super.init(
-            contentRect: NSRect(origin: .zero, size: collapsedSize),
+            contentRect: NSRect(origin: .zero, size: chrome),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: true
@@ -30,68 +34,93 @@ final class CountdownIslandPanel: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         isMovableByWindowBackground = false
         hidesOnDeactivate = false
-        // Need hit-testing for hover close; only this small pill intercepts clicks.
         ignoresMouseEvents = false
 
         root.wantsLayer = true
-        root.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.45).cgColor
-        root.layer?.cornerRadius = collapsedSize.height / 2
-        root.layer?.masksToBounds = true
+        root.layer?.backgroundColor = NSColor.clear.cgColor
         root.onHoverChanged = { [weak self] hovering in
-            self?.setCloseVisible(hovering)
+            self?.updateCloseVisibility(hovering: hovering)
         }
+        root.onDragBegan = { [weak self] cursorScreen in
+            guard let self else { return }
+            self.isDragging = true
+            self.grabOffset = CountdownIslandDrag.grabOffset(
+                pillOrigin: self.frame.origin,
+                cursor: cursorScreen
+            )
+            self.setCloseVisible(true)
+        }
+        root.onDragMoved = { [weak self] cursorScreen in
+            guard let self, let grab = self.grabOffset else { return }
+            let origin = CountdownIslandDrag.origin(cursor: cursorScreen, grabOffset: grab)
+            self.setFrameOrigin(origin)
+        }
+        root.onDragEnded = { [weak self] cursorStillInside in
+            guard let self else { return }
+            self.isDragging = false
+            self.grabOffset = nil
+            self.updateCloseVisibility(hovering: cursorStillInside)
+        }
+        root.closeButton = closeButton
 
-        timeLabel.font = .monospacedDigitSystemFont(ofSize: 15, weight: .semibold)
+        let pill = CountdownIslandLayout.pillFrame()
+        pillView.frame = pill
+        pillView.wantsLayer = true
+        pillView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.45).cgColor
+        pillView.layer?.cornerRadius = CountdownIslandLayout.pillSize.height / 2
+        pillView.layer?.masksToBounds = true
+        root.addSubview(pillView)
+
+        timeLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
         timeLabel.textColor = .white
         timeLabel.alignment = .center
         timeLabel.isBezeled = false
         timeLabel.drawsBackground = false
         timeLabel.isSelectable = false
         timeLabel.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(timeLabel)
+        pillView.addSubview(timeLabel)
+        NSLayoutConstraint.activate([
+            timeLabel.centerXAnchor.constraint(equalTo: pillView.centerXAnchor),
+            timeLabel.centerYAnchor.constraint(equalTo: pillView.centerYAnchor),
+        ])
 
+        let badge = CountdownIslandLayout.badgeFrame(pillFrame: pill)
+        closeButton.frame = badge
         closeButton.image = NSImage(
-            systemSymbolName: "xmark",
+            systemSymbolName: "xmark.circle.fill",
             accessibilityDescription: "Cancel countdown"
         )
         closeButton.bezelStyle = .inline
         closeButton.isBordered = false
-        closeButton.contentTintColor = NSColor.white.withAlphaComponent(0.9)
+        closeButton.imagePosition = .imageOnly
+        closeButton.imageScaling = .scaleProportionallyUpOrDown
+        closeButton.contentTintColor = NSColor.white.withAlphaComponent(0.95)
         closeButton.target = self
         closeButton.action = #selector(closeClicked)
         closeButton.isHidden = true
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
+        closeButton.alphaValue = 0
         closeButton.setButtonType(.momentaryChange)
         root.addSubview(closeButton)
 
-        NSLayoutConstraint.activate([
-            timeLabel.centerYAnchor.constraint(equalTo: root.centerYAnchor),
-            timeLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
-            timeLabel.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -4),
-
-            closeButton.centerYAnchor.constraint(equalTo: root.centerYAnchor),
-            closeButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -10),
-            closeButton.widthAnchor.constraint(equalToConstant: 18),
-            closeButton.heightAnchor.constraint(equalToConstant: 18),
-        ])
-
         contentView = root
-        setContentSize(collapsedSize)
+        setContentSize(chrome)
+        root.frame = NSRect(origin: .zero, size: chrome)
     }
 
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    /// Begin or replace the countdown.
     func start(seconds: Int) {
         stopTimer()
         total = max(1, seconds)
         remaining = total
         timeLabel.stringValue = Countdown.format(seconds: remaining)
+        isDragging = false
+        grabOffset = nil
         setCloseVisible(false)
         positionUnderNotch()
         orderFrontRegardless()
-        print("[countdown] start \(seconds)s hoverClose=1 key=0 alpha=0.45")
+        print("[countdown] start \(seconds)s compact=1 overlayX=1 grabDrag=1")
 
         let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -131,33 +160,42 @@ final class CountdownIslandPanel: NSPanel {
         tick = nil
     }
 
+    private func updateCloseVisibility(hovering: Bool) {
+        setCloseVisible(hovering || isDragging)
+    }
+
     private func setCloseVisible(_ visible: Bool) {
         closeButton.isHidden = !visible
-        let size = visible ? expandedSize : collapsedSize
-        let oldOrigin = frame.origin
-        // Keep horizontal center stable when expanding for the ×.
-        let midX = oldOrigin.x + frame.width / 2
-        setContentSize(size)
-        setFrameOrigin(NSPoint(x: midX - size.width / 2, y: oldOrigin.y))
-        root.frame = NSRect(origin: .zero, size: size)
-        root.layer?.cornerRadius = size.height / 2
-        root.updateTrackingAreas()
+        closeButton.alphaValue = visible ? 1 : 0
     }
 
     private func positionUnderNotch() {
         guard let screen = NSScreen.main else { return }
-        let visible = screen.visibleFrame
-        let frame = self.frame
-        let x = visible.midX - frame.width / 2
-        let y = visible.maxY - frame.height - 10
-        setFrameOrigin(NSPoint(x: x, y: y))
+        let origin = CountdownIslandLayout.defaultOrigin(
+            visibleFrame: screen.visibleFrame,
+            chromeSize: CountdownIslandLayout.chromeSize
+        )
+        setFrameOrigin(origin)
     }
 }
 
-/// Root view that reports mouse enter/exit for the hover close control.
-private final class HoverRootView: NSView {
+/// Pill chrome: hover tracking + grab-offset drag.
+private final class PillRootView: NSView {
     var onHoverChanged: ((Bool) -> Void)?
+    var onDragBegan: ((CGPoint) -> Void)?
+    var onDragMoved: ((CGPoint) -> Void)?
+    var onDragEnded: ((Bool) -> Void)?
+    weak var closeButton: NSView?
     private var tracking: NSTrackingArea?
+    private var dragActive = false
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard let hit = super.hitTest(point) else { return nil }
+        if let closeButton, hit === closeButton || hit.isDescendant(of: closeButton) {
+            return hit
+        }
+        return self
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -179,6 +217,27 @@ private final class HoverRootView: NSView {
     }
 
     override func mouseExited(with event: NSEvent) {
+        if dragActive { return }
         onHoverChanged?(false)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard let window else { return }
+        dragActive = true
+        let cursor = window.convertPoint(toScreen: event.locationInWindow)
+        onDragBegan?(cursor)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard dragActive, let window else { return }
+        let cursor = window.convertPoint(toScreen: event.locationInWindow)
+        onDragMoved?(cursor)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard dragActive else { return }
+        dragActive = false
+        let local = convert(event.locationInWindow, from: nil)
+        onDragEnded?(bounds.contains(local))
     }
 }

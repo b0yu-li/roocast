@@ -74,14 +74,64 @@ final class CountdownTests: XCTestCase {
         XCTAssertEqual(results.first?.name, "5:00")
     }
 
-    func testResultsCountdownDoesNotFireForPlainQuery() {
+    func testResultsPutsTimerHintForBareVerb() {
         let results = AppSearch.results(
             query: "timer",
             apps: [],
             folders: []
         )
+        XCTAssertEqual(results.first?.kind, .countdownHint)
+        XCTAssertEqual(results.first?.name, "Timer")
+    }
+
+    func testResultsPutsCountdownHint() {
+        let results = AppSearch.results(
+            query: "countdown",
+            apps: [AppItem.stub(name: "Notes")],
+            folders: []
+        )
+        XCTAssertEqual(results.first?.kind, .countdownHint)
+        XCTAssertEqual(results.first?.name, "Countdown")
+    }
+
+    func testLeadNeedsDurationVsReady() {
+        XCTAssertEqual(Countdown.lead(for: "timer"), .needsDuration(verb: "timer"))
+        XCTAssertEqual(Countdown.lead(for: "timer xyz"), .needsDuration(verb: "timer"))
+        guard case .ready(let spec) = Countdown.lead(for: "timer 5m") else {
+            return XCTFail("expected ready lead")
+        }
+        XCTAssertEqual(spec.seconds, 300)
+    }
+
+    func testLeadMatchesUniquePrefixLikeTabLock() {
+        XCTAssertEqual(Countdown.lead(for: "tim"), .needsDuration(verb: "timer"))
+        XCTAssertEqual(Countdown.lead(for: "time"), .needsDuration(verb: "timer"))
+        XCTAssertEqual(Countdown.lead(for: "coun"), .needsDuration(verb: "countdown"))
+        guard case .ready(let spec) = Countdown.lead(for: "time 5m") else {
+            return XCTFail("expected ready lead from prefix + duration")
+        }
+        XCTAssertEqual(spec.seconds, 300)
+    }
+
+    func testResultsPutsTimerHintForPrefix() {
+        let results = AppSearch.results(
+            query: "time",
+            apps: [AppItem.stub(name: "Time Machine")],
+            folders: []
+        )
+        XCTAssertEqual(results.first?.kind, .countdownHint)
+        XCTAssertEqual(results.first?.name, "Timer")
+    }
+
+    func testResultsNoCountdownForPlainQuery() {
+        let results = AppSearch.results(
+            query: "notes",
+            apps: [],
+            folders: []
+        )
         XCTAssertFalse(results.contains {
             if case .countdown = $0.kind { return true }
+            if case .countdownHint = $0.kind { return true }
             return false
         })
     }

@@ -23,6 +23,8 @@ struct AppItem: Identifiable, Hashable {
         case calculator(copyText: String)
         /// Lead countdown row — Enter starts the island for `seconds`.
         case countdown(seconds: Int)
+        /// Timer/countdown recognized but duration still needed — Enter is a no-op.
+        case countdownHint
     }
 
     let id: UUID
@@ -415,9 +417,29 @@ struct AppItem: Identifiable, Hashable {
             path: "Countdown",
             icon: icon,
             isRunning: false,
-            profile: "Esc cancels",
+            profile: "Hover × to cancel",
             aliases: [],
             kind: .countdown(seconds: spec.seconds)
+        )
+    }
+
+    /// Hint row when the user typed `timer` / `countdown` without a valid duration.
+    static func countdownHint(verb: String) -> AppItem {
+        let icon = NSImage(
+            systemSymbolName: "timer",
+            accessibilityDescription: "Countdown"
+        )
+        icon?.size = NSSize(width: 32, height: 32)
+        let title = verb.lowercased() == "countdown" ? "Countdown" : "Timer"
+        return AppItem(
+            id: nameBasedUUID("roocast.countdown.hint:\(verb.lowercased())"),
+            name: title,
+            path: "Countdown",
+            icon: icon,
+            isRunning: false,
+            profile: "Type a duration — 5m · 1h30m · 90s",
+            aliases: [],
+            kind: .countdownHint
         )
     }
 

@@ -9,21 +9,51 @@ enum Countdown {
         let display: String
     }
 
-    /// Parse a launcher query. Returns `nil` when this is not timer/countdown mode
-    /// or the duration is missing/invalid (fall through to normal search).
-    nonisolated static func parse(_ query: String) -> Spec? {
+    /// Lead row for the launcher: ready to start, or verb recognized but needs a duration.
+    enum Lead: Equatable {
+        case ready(Spec)
+        /// Verb matched (`timer` / `countdown`) but duration missing or invalid.
+        case needsDuration(verb: String)
+    }
+
+    /// Parse a launcher query into a countdown lead (ready or hint).
+    /// Returns `nil` when this is not timer/countdown mode (fall through to search).
+    ///
+    /// Matches the full verb (`timer`) **or** a unique Tab-lock prefix (`tim` / `time`),
+    /// so the lead row appears as soon as the command is unambiguous.
+    nonisolated static func lead(for query: String) -> Lead? {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
         let parts = trimmed.split(whereSeparator: { $0.isWhitespace }).map(String.init)
-        guard parts.count >= 2 else { return nil }
+        guard let first = parts.first else { return nil }
+        let lowered = first.lowercased()
 
-        let verb = parts[0].lowercased()
-        guard verb == "timer" || verb == "countdown" else { return nil }
+        let verb: String
+        if lowered == "timer" || lowered == "countdown" {
+            verb = lowered
+        } else if let cmd = CommandLock.uniqueCompletion(forToken: lowered) {
+            // Same uniqueness rule as Tab-lock (`time` → timer).
+            verb = cmd.verb
+        } else {
+            return nil
+        }
 
-        let durationToken = parts.dropFirst().joined()
-        guard let seconds = parseDuration(durationToken), seconds >= 1 else { return nil }
-        return Spec(seconds: seconds, display: format(seconds: seconds))
+        if parts.count >= 2 {
+            let durationToken = parts.dropFirst().joined()
+            if let seconds = parseDuration(durationToken), seconds >= 1 {
+                return .ready(Spec(seconds: seconds, display: format(seconds: seconds)))
+            }
+            // Verb + junk / incomplete duration — still show the timer entry.
+            return .needsDuration(verb: verb)
+        }
+        return .needsDuration(verb: verb)
+    }
+
+    /// Ready-to-start parse only (`timer 5m`). Prefer `lead(for:)` for search UI.
+    nonisolated static func parse(_ query: String) -> Spec? {
+        if case .ready(let spec) = lead(for: query) { return spec }
+        return nil
     }
 
     /// `5m`, `90s`, `1h`, `1h30m`, bare `25` (= 25 minutes).

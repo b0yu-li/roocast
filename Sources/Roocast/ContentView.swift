@@ -352,6 +352,11 @@ struct ContentView: View {
             return
         }
 
+        if app.kind == .countdownHint {
+            // Keep the panel open — user still needs a duration argument.
+            return
+        }
+
         if app.kind == .quit {
             searchSession.clear()
             NSApplication.shared.terminate(nil)
