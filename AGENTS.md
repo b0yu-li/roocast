@@ -110,7 +110,7 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 1. **Measure before you optimize.** Instruments first, opinions second.
 2. **Every PR includes a memory check.** If it regresses memory by > 2MB, it needs justification.
 3. **No force-unwraps in production code.** `guard let` or `??` with a sensible default.
-4. **Tests are not optional.** Core services have unit tests. UI has snapshot tests.
+4. **Tests are not optional.** Core services have unit tests. UI has snapshot tests. Full strategy: [`docs/TESTING.md`](docs/TESTING.md).
 5. **Commit messages explain why, not what.** The diff shows what.
 6. **If you add a dependency, justify it.** Every SPM package is a liability. Prefer the standard library.
 7. **Profile on real hardware.** Simulators lie. Test on the oldest supported Mac.
@@ -118,7 +118,7 @@ Replace Raycast with a **native macOS app** that delivers instant responsiveness
 9. **Keyboard-first design.** Every action reachable without a mouse. This is a launcher, after all.
 10. **When in doubt, do less.** Remove features before adding optimizations.
 11. **No shipping identity in committed source.** Bundle id, Apple Team ID, product-site hostnames, update Ed25519 public/private keys, and similar packaging secrets belong in gitignored `Scripts/identity.env` / `docs/DISTRIBUTION.private.md` and are stamped into Info.plist at package time (`release.sh` / `dev-install.sh`). Do **not** hardcode them in Swift, committed scripts, tests (use `example.com` / ephemeral keys), or public docs. Agents must not reintroduce scrubbed values into the public tree.
-12. **Concrete ACs before code; TDD for the behavior.** For non-trivial UX/behavior work: (a) write explicit acceptance criteria and lock them with the user when ambiguous; (b) extract pure, testable rules (layout math, parse, scoring, drag geometry) and write failing tests that encode those ACs; (c) implement until green; (d) only then wire AppKit/SwiftUI. Do **not** jump straight to panel/view tweaks when the rule can live in a pure module. If ACs are missing, ask — do not invent and ship silently.
+12. **Concrete ACs before code; TDD for the behavior.** For non-trivial UX/behavior work: (a) write explicit acceptance criteria and lock them with the user when ambiguous; (b) extract pure, testable rules (layout math, parse, scoring, drag geometry) and write failing tests that encode those ACs; (c) implement until green; (d) only then wire AppKit/SwiftUI. Do **not** jump straight to panel/view tweaks when the rule can live in a pure module. If ACs are missing, ask — do not invent and ship silently. Details and pyramid: [`docs/TESTING.md`](docs/TESTING.md).
 
 ---
 

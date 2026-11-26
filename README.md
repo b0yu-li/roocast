@@ -25,7 +25,7 @@ Requires **macOS 14+**. Grant **Accessibility** when prompted.
 swift test
 ```
 
-Distribution / notarization notes: [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md). Design notes for agents: [`AGENTS.md`](AGENTS.md).
+Distribution / notarization notes: [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md). Testing strategy: [`docs/TESTING.md`](docs/TESTING.md). Design notes for agents: [`AGENTS.md`](AGENTS.md).
 
 ## License
 
