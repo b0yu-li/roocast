@@ -2,6 +2,9 @@ import CryptoKit
 import XCTest
 @testable import Roocast
 
+/// Mix of unit helpers and integration store round-trips (persist → reload).
+/// Persist/reload / recopy / image soft-cap cases are Integration-layer.
+/// See `docs/TESTING.md` — Integration / store round-trips.
 @MainActor
 final class ClipboardStoreTests: XCTestCase {
 

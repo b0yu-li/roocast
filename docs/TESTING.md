@@ -21,7 +21,7 @@ Agents: follow this doc together with [`AGENTS.md`](../AGENTS.md) rule **12** (c
         ┌─────────────────┐
         │ Manual smoke    │  Panels, Accessibility, notarized DMG, TCC
         ├─────────────────┤
-        │ Integration     │  Rare: AppSearch + stubs, store round-trips
+        │ Integration     │  Core user paths: 2+ modules in-process
         ├─────────────────┤
         │ Unit (majority) │  Pure enums/structs: parse, score, layout, crypto
         └─────────────────┘
@@ -29,11 +29,49 @@ Agents: follow this doc together with [`AGENTS.md`](../AGENTS.md) rule **12** (c
 
 | Layer | Where | Examples |
 | --- | --- | --- |
-| **Unit** | `Tests/RoocastTests/*` | `Countdown`, `CommandLock`, `CountdownIslandLayout` / `CountdownIslandDrag`, `Calculator`, `IntentionScore`, `UpdateSigning`, `PanelFocusPolicy` |
-| **Integration-ish** | Same target, still in-process | `AppSearch.results` with stub `AppItem`s; `ClipboardStore` with controlled pasteboard doubles when present |
+| **Unit** | Focused pure suites | `Countdown.parse` / `CommandLock.uniqueCompletion`, `IntentionScore`, `CountdownIslandLayout` / `Drag`, `Calculator.evaluate`, `UpdateSigning.verify`, `PanelFocusPolicy`, `WindowSnap` frame math alone |
+| **Integration** | Same XCTest target; compose ≥2 modules or I/O boundary | See below — **first-class**, not “rare” |
 | **Manual smoke** | Human / `./dev-install.sh` | Launcher show/hide, island hover × + drag feel, Accessibility grants, notarization, Homebrew cask fetch |
 
-We do **not** currently run UI snapshot or XCUITest suites in CI. AGENTS mentions snapshot tests as a direction for UI chrome; prefer extracting layout/policy into pure modules (as with the countdown island) over screenshot diffs until a snapshot harness earns its keep.
+### What counts as Integration (do these here)
+
+In-process only (no XCUITest). A test is **integration** when it crosses a seam users hit:
+
+| Seam | Home | Asserts |
+| --- | --- | --- |
+| **`AppSearch.results` + stubs** | `AppSearchTests` (results/rank cases) + `CoreUserPathIntegrationTests` | Lead rows, built-in commands, folder/app ranking, demote sink, empty-query switch suggestions — real `AppSearch` + `AppItem.stub` / folders |
+| **Store round-trips** | `ClipboardStoreTests` (persist/reload) + clipboard cases in `CoreUserPathIntegrationTests` | Prepend / recopy / remove → `persistNow` → new store `loadPersistedHistory` → same order/content; image soft-cap + owned blobs when applicable |
+| **Session / index seams** | `CoreUserPathIntegrationTests` | `SearchSession` lock → search lead; prefs file → demote → rank; zoxide publish → `AppIndex.search`; snap hit → `targetFrame`; signed feed → outcome |
+
+**Unit vs integration split for search/clipboard:**
+
+- **Unit:** `matchesQuitCommand("qui")`, `IntentionScore.score…`, `ClipboardStore.preview…` / date-bucket helpers with no disk.
+- **Integration:** any `AppSearch.results(…)` with apps/folders/demote; any clipboard path that writes JSON (or blobs) and reads them back.
+
+Prefer extending the existing suite that owns the seam (`AppSearchTests` / `ClipboardStoreTests`) for search/store composition. Use `CoreUserPathIntegrationTests` for **cross-feature** paths (session↔search, prefs↔search, index↔zoxide, search↔snap, feed pipeline).
+
+### Health check (honest)
+
+| Layer | Status | Notes |
+| --- | --- | --- |
+| **Unit** | Strong | Keep pure rules here; don’t dilute with `results()` + stub soups |
+| **Integration** | Required | `AppSearch`+stubs and store round-trips **are** this layer (already largely present); also session/index/update compositions in `CoreUserPathIntegrationTests` |
+| **UI / E2E** | Manual only | No XCUITest/snapshots yet — prefer pure layout modules over screenshot harnesses |
+
+We do **not** currently run UI snapshot or XCUITest suites in CI. Prefer extracting layout/policy into pure modules (as with the countdown island) over screenshot diffs until a snapshot harness earns its keep.
+
+### Core user paths (integration must cover)
+
+When adding or changing these paths, add/extend integration tests (right file per table above):
+
+1. **Launcher search** — `AppSearch.results` + stubs (rank, built-ins, folders, demote)
+2. **Countdown CLI** — lock chip → duration → ready lead (and unlock/clear)
+3. **Search demote** — `SearchRankPreferences` → `AppSearch.results`
+4. **Calculator lead** — expression beats weak app name match
+5. **Window snap** — search hit kind → `WindowSnap.targetFrame` (no AX write)
+6. **Zoxide** — published match → `AppIndex.search("z …")` returns folder; `zoom` is not z-mode
+7. **Clipboard store** — recopy / mutate → persist → reload round-trip
+8. **Updates** — decode signed feed → available / upToDate (ephemeral keys)
 
 ---
 

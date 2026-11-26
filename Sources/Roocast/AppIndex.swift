@@ -245,6 +245,15 @@ final class AppIndex: ObservableObject {
         zoxideKey = nil
     }
 
+    /// Test seam: publish a frecent match as if `scheduleZoxide` completed (no CLI).
+    func publishZoxideMatchForTesting(path: String, keywords: [String]) {
+        zoxideTask?.cancel()
+        zoxideTask = nil
+        zoxideGeneration += 1
+        zoxideItem = AppItem.zoxide(path: path)
+        zoxideKey = Self.makeZoxideKey(keywords)
+    }
+
     private nonisolated static func makeZoxideKey(_ keywords: [String]) -> String {
         keywords.joined(separator: "\u{1f}")
     }

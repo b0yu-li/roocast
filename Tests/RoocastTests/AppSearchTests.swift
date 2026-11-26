@@ -1,6 +1,9 @@
 import XCTest
 @testable import Roocast
 
+/// Integration-leaning: most cases call `AppSearch.results` with stubs (compose
+/// search + scoring + built-ins). Pure matcher helpers are still unit-shaped.
+/// See `docs/TESTING.md` — Integration / AppSearch + stubs.
 final class AppSearchTests: XCTestCase {
 
     func testMatchesQuitCommandPrefixes() {
