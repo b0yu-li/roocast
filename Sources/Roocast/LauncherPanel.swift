@@ -23,9 +23,9 @@ final class LauncherPanel: FloatingPanel {
                 navigationState: navigationState,
                 menuModel: menuModel,
                 rankPreferences: rankPreferences,
-                onDismiss: { [weak self] in
-                    // Launch path: target app activates itself.
-                    self?.hide(restoreFocus: false)
+                onDismiss: { [weak self] restoreFocus in
+                    // App handoff: LaunchHandoffPlan.restoreFocus == false (target activates itself).
+                    self?.hide(restoreFocus: restoreFocus)
                 },
                 onWindowSnap: { [weak self] command in
                     self?.performWindowSnap(command)

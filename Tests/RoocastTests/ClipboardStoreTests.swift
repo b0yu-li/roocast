@@ -226,6 +226,47 @@ final class ClipboardStoreTests: XCTestCase {
         XCTAssertEqual(files.count, 2)
     }
 
+    /// AC1/AC4: Finder-style pointer is not copied into `images/`, and does not
+    /// count toward the owned soft-cap (never deletes the user's file).
+    func testImagePointerIsNotCopiedIntoImagesDirAndSkipsSoftCap() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("roocast-clipboard-ptr-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let images = dir.appendingPathComponent("images", isDirectory: true)
+        let original = dir.appendingPathComponent("vacation.png")
+        let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
+        try png.write(to: original)
+
+        let store = ClipboardStore(
+            maxItems: 20,
+            maxImages: 1,
+            imagesDirectoryURL: images,
+            persistToDisk: false
+        )
+
+        XCTAssertNotNil(store.prependImagePointerForTesting(original.path))
+        XCTAssertNotNil(store.prependImagePointerForTesting(original.path)) // promote, no dup
+        XCTAssertEqual(store.items.filter { $0.kind == .image }.count, 1)
+        XCTAssertEqual(store.items[0].imagePath, original.standardizedFileURL.path)
+        XCTAssertEqual(store.items[0].preview, "vacation.png")
+        XCTAssertFalse(store.ownsImage(store.items[0]))
+
+        // Soft-cap of 1 owned: pointer must not create files under images/.
+        let pointerOwnedFiles =
+            (try? FileManager.default.contentsOfDirectory(atPath: images.path)) ?? []
+        XCTAssertTrue(pointerOwnedFiles.isEmpty)
+
+        // Filling the owned cap must not remove the unowned pointer or its file.
+        XCTAssertNotNil(store.prependImageForTesting(png))
+        XCTAssertNotNil(store.prependImageForTesting(png))
+        XCTAssertTrue(store.items.contains { $0.imagePath == original.standardizedFileURL.path })
+        XCTAssertTrue(FileManager.default.fileExists(atPath: original.path))
+        let ownedFiles = (try? FileManager.default.contentsOfDirectory(atPath: images.path)) ?? []
+        XCTAssertEqual(ownedFiles.count, 1)
+    }
+
     func testPasteboardFilesReadsPNGFromDiskNotIconSized() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("roocast-pb-files-\(UUID().uuidString)", isDirectory: true)

@@ -18,7 +18,8 @@ struct ContentView: View {
     @ObservedObject var rankPreferences: SearchRankPreferences
     @StateObject private var appIndex = AppIndex()
     @FocusState private var isSearchFocused: Bool
-    let onDismiss: () -> Void
+    /// Hide the launcher. `restoreFocus` is false for app handoff (target activates itself).
+    let onDismiss: (_ restoreFocus: Bool) -> Void
     /// Snap/maximize the prior focused window. Panel supplies AX target.
     var onWindowSnap: ((WindowSnap.Command) -> Void)? = nil
     /// Start (or replace) the Dynamic Island countdown pill.
@@ -230,6 +231,27 @@ struct ContentView: View {
                 actionsMenuOverlay
             }
         }
+        // DIAG: prove ⌘K twitch — overlay fixed height vs live results area.
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear {
+                        FocusRestorer.log(
+                            "actionsMenu diag: resultsArea.h=\(geo.size.height) overlayConst=\(listViewportHeight) headerConst=\(LauncherMenuLayout.headerHeight) menuOpen=\(menuModel.isOpen)"
+                        )
+                    }
+                    .onChange(of: geo.size.height) { _, h in
+                        FocusRestorer.log(
+                            "actionsMenu diag: resultsArea.h changed → \(h) overlayConst=\(listViewportHeight) menuOpen=\(menuModel.isOpen)"
+                        )
+                    }
+                    .onChange(of: menuModel.isOpen) { _, open in
+                        FocusRestorer.log(
+                            "actionsMenu diag: isOpen=\(open) resultsArea.h=\(geo.size.height) overlayConst=\(listViewportHeight) delta=\(geo.size.height - listViewportHeight)"
+                        )
+                    }
+            }
+        )
     }
 
     /// Raycast-style hint row: primary action + Actions ⌘K.
@@ -341,14 +363,14 @@ struct ContentView: View {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(copyText, forType: .string)
             searchSession.clear()
-            onDismiss()
+            onDismiss(false)
             return
         }
 
         if case .countdown(let seconds) = app.kind {
             searchSession.clear()
             onCountdown?(seconds)
-            onDismiss()
+            onDismiss(false)
             return
         }
 
@@ -365,7 +387,7 @@ struct ContentView: View {
 
         if app.kind == .checkForUpdates {
             searchSession.clear()
-            onDismiss()
+            onDismiss(false)
             Task { @MainActor in
                 let outcome = await UpdateCheck.check()
                 UpdateCheck.present(outcome)
@@ -375,7 +397,7 @@ struct ContentView: View {
 
         if app.kind == .uninstall {
             searchSession.clear()
-            onDismiss()
+            onDismiss(false)
             UninstallRoocast.run()
             return
         }
@@ -452,24 +474,41 @@ struct ContentView: View {
             return
         }
 
+        // Clear so the next open starts with an empty search field.
+        searchSession.clear()
+
+        // Tinycast-style: dismiss first, then fire launch (see LaunchHandoffPlan).
         if app.kind == .folder {
-            NSWorkspace.shared.open(URL(fileURLWithPath: app.path, isDirectory: true))
-            searchSession.clear()
-            onDismiss()
+            executeLaunchHandoff(LaunchHandoffPlan.forFolder(path: app.path))
             return
         }
 
-        // If this is a Firefox profile, handle profile-specific launch
         if let profile = app.profile {
-            AppLauncher.launchFirefoxProfile(profile: profile, appPath: app.path)
+            executeLaunchHandoff(
+                LaunchHandoffPlan.forFirefoxProfile(profile: profile, path: app.path)
+            )
         } else {
-            // Standard launch — activates + unminimizes if already running
-            AppActivator.activateOrLaunch(appPath: app.path)
+            executeLaunchHandoff(LaunchHandoffPlan.forApplication(path: app.path))
         }
+    }
 
-        // Clear so the next open starts with an empty search field
-        searchSession.clear()
-        onDismiss()
+    /// Runs a tested handoff plan in order (dismiss → activate/open).
+    private func executeLaunchHandoff(_ plan: LaunchHandoffPlan) {
+        for step in plan.steps {
+            switch step {
+            case .dismissPanel:
+                onDismiss(plan.restoreFocus)
+            case .activateOrLaunch(let path):
+                AppActivator.activateOrLaunch(
+                    appPath: path,
+                    allowsRunningApplicationSubstitution: plan.allowsRunningApplicationSubstitution
+                )
+            case .launchFirefoxProfile(let profile, let path):
+                AppLauncher.launchFirefoxProfile(profile: profile, appPath: path)
+            case .openFolder(let path):
+                NSWorkspace.shared.open(URL(fileURLWithPath: path, isDirectory: true))
+            }
+        }
     }
 }
 

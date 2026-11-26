@@ -50,12 +50,15 @@ struct AppLauncher {
         let appURL = URL(fileURLWithPath: appPath)
         let config = NSWorkspace.OpenConfiguration()
         config.activates = true
+        config.allowsRunningApplicationSubstitution = false
         config.arguments = [
             "-no-remote",
             "--profile", profilePath.path,
             "-foreground",
         ]
 
+        // Completion only for error fallback — does not gate panel dismiss
+        // (LaunchHandoffPlan.awaitsLaunchCompletion == false; dismiss already ran).
         NSWorkspace.shared.openApplication(at: appURL, configuration: config) { _, error in
             if error != nil {
                 openFirefoxApp(appPath: appPath)
@@ -65,9 +68,9 @@ struct AppLauncher {
 
     private static func openFirefoxApp(appPath: String) {
         let appURL = URL(fileURLWithPath: appPath)
-        NSWorkspace.shared.openApplication(
-            at: appURL,
-            configuration: NSWorkspace.OpenConfiguration()
-        )
+        let config = NSWorkspace.OpenConfiguration()
+        config.allowsRunningApplicationSubstitution = false
+        // Fire-and-forget — no completion wait.
+        NSWorkspace.shared.openApplication(at: appURL, configuration: config)
     }
 }

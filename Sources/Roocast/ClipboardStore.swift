@@ -14,7 +14,7 @@ struct ClipboardItem: Identifiable, Equatable, Codable {
     let kind: Kind
     /// Plain text for `.text` rows; empty for `.image`.
     let text: String
-    /// Absolute path under the store's images dir for owned PNG blobs.
+    /// Absolute path: owned PNG under `images/`, or an unowned Finder file pointer.
     let imagePath: String?
     let createdAt: Date
 
@@ -32,6 +32,13 @@ struct ClipboardItem: Identifiable, Equatable, Codable {
         self.createdAt = createdAt
     }
 
+    /// Filename for an unowned path pointer (empty for owned blobs / text).
+    var imageDisplayName: String? {
+        guard kind == .image, let imagePath, !imagePath.isEmpty else { return nil }
+        let name = URL(fileURLWithPath: imagePath).lastPathComponent
+        return name.isEmpty ? nil : name
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -46,7 +53,12 @@ struct ClipboardItem: Identifiable, Equatable, Codable {
     var preview: String {
         switch kind {
         case .image:
-            return "Image"
+            // Ownership is decided at capture; owned blobs leave `text` empty and
+            // use UUID filenames — show "Image". Pointers stash the filename in `text`.
+            return ClipboardImagePolicy.previewLabel(
+                displayName: text.isEmpty ? imageDisplayName : text,
+                isOwnedBlob: text.isEmpty
+            )
         case .text:
             let collapsed = text
                 .replacingOccurrences(of: "\n", with: " ")
@@ -92,11 +104,11 @@ struct ClipboardItem: Identifiable, Equatable, Codable {
 /// (~every 2s). Pasteboard string reads and `@Published` updates hop to the
 /// main actor, so idle main-thread cost is near zero.
 ///
-/// **Images (v0.11):** Durable image *file URLs* (Finder) load from disk first —
-/// Finder's companion `.png`/`.tiff` is often a 1024² file-type icon. Bare
-/// inline `.png`/`.tiff` (Copy Image) still win over `.string`. TIFF→PNG + blob
-/// write run off the poll path; rows hold a path under Application Support
-/// `images/`. Soft-capped so a few 6K shots cannot dominate the 50 MB budget.
+/// **Images:** Durable image *file URLs* (Finder) are stored as path pointers —
+/// never copied into Application Support (Tinycast `.file` style). Bare inline
+/// `.png`/`.tiff` (Copy Image / screenshot) still become owned PNG blobs under
+/// `images/`. Paste publishes `fileURL` (+ path string), not PNG bytes.
+/// Soft-cap applies only to owned blobs.
 ///
 /// **At rest:** Plain JSON under Application Support. FileVault is the at-rest
 /// layer — the old AES-GCM/Keychain scheme only re-implemented what the
@@ -241,7 +253,7 @@ final class ClipboardStore: ObservableObject {
         persistNow()
     }
 
-    /// Absolute URL for an owned image blob, if the row still points at one on disk.
+    /// Absolute URL for an image row (owned blob or unowned Finder pointer), if on disk.
     func imageURL(for item: ClipboardItem) -> URL? {
         guard item.kind == .image, let path = item.imagePath, !path.isEmpty else { return nil }
         let url = URL(fileURLWithPath: path)
@@ -249,8 +261,14 @@ final class ClipboardStore: ObservableObject {
         return url
     }
 
+    /// Whether `item`'s image lives under our `images/` directory (safe to delete).
+    func ownsImage(_ item: ClipboardItem) -> Bool {
+        guard item.kind == .image, let path = item.imagePath else { return false }
+        return ownsImage(at: path)
+    }
+
     /// Writes an item back to the general pasteboard without re-recording it.
-    /// Images: PNG + fileURL + marker — never `.string` (Tinycast: rich text would prefer path).
+    /// Images: fileURL pointer (+ path string) — never PNG bytes (`ClipboardImagePolicy`).
     func copyToPasteboard(_ item: ClipboardItem) {
         let pb = NSPasteboard.general
         switch item.kind {
@@ -261,18 +279,26 @@ final class ClipboardStore: ObservableObject {
             pb.setData(Data(), forType: Self.internalType)
             FocusRestorer.log("clipboard: wrote \(item.text.count) chars to pasteboard")
         case .image:
-            guard let url = imageURL(for: item),
-                  let data = try? Data(contentsOf: url, options: .mappedIfSafe)
-            else {
-                FocusRestorer.log("clipboard: image paste failed — missing blob")
+            guard let url = imageURL(for: item) else {
+                FocusRestorer.log("clipboard: image paste failed — missing file")
                 return
             }
+            assert(!ClipboardImagePolicy.pastesImageBytes)
             pb.clearContents()
-            pb.declareTypes([.png, .fileURL, Self.internalType], owner: nil)
-            pb.setData(data, forType: .png)
-            pb.setData(url.dataRepresentation, forType: .fileURL)
+            var types: [NSPasteboard.PasteboardType] = [Self.internalType]
+            if ClipboardImagePolicy.pastesFileURL { types.insert(.fileURL, at: 0) }
+            if ClipboardImagePolicy.pastesPathAsString {
+                types.insert(.string, at: types.count - 1)
+            }
+            pb.declareTypes(types, owner: nil)
+            if ClipboardImagePolicy.pastesFileURL {
+                pb.setData(url.dataRepresentation, forType: .fileURL)
+            }
+            if ClipboardImagePolicy.pastesPathAsString {
+                pb.setString(url.path, forType: .string)
+            }
             pb.setData(Data(), forType: Self.internalType)
-            FocusRestorer.log("clipboard: wrote image (\(data.count) bytes) to pasteboard")
+            FocusRestorer.log("clipboard: wrote image file pointer \(url.lastPathComponent)")
         }
         let count = pb.changeCount
         if NSPasteboard.general.changeCount == count {
@@ -295,6 +321,7 @@ final class ClipboardStore: ObservableObject {
             switch item.kind {
             case .image:
                 return item.preview.lowercased().contains(lowered)
+                    || (item.imagePath?.lowercased().contains(lowered) ?? false)
             case .text:
                 return item.text.lowercased().contains(lowered)
             }
@@ -310,6 +337,12 @@ final class ClipboardStore: ObservableObject {
     @discardableResult
     func prependImageForTesting(_ pngData: Data) -> ClipboardItem? {
         insertImage(pngData: pngData, persist: true)
+    }
+
+    /// Test helper — insert an unowned Finder-style image pointer (no copy into `images/`).
+    @discardableResult
+    func prependImagePointerForTesting(_ path: String) -> ClipboardItem? {
+        insertImagePointer(path: path, persist: true)
     }
 
     /// Delete one entry (tinycast's "Delete Entry") and persist immediately —
@@ -369,19 +402,10 @@ final class ClipboardStore: ObservableObject {
         if let types = pb.types, !Set(types).isDisjoint(with: Self.sensitiveTypes) { return }
 
         // Finder puts a file-type *icon* as .png/.tiff beside public.file-url.
-        // Prefer the durable file and load pixels from disk (evidence: icon was 1024²).
+        // Prefer the durable file as an unowned pointer — never copy into `images/`.
         if let fileURL = ClipboardPasteboardFiles.firstDurableImageFileURL(on: pb) {
-            Task.detached(priority: .utility) { [weak self] in
-                guard let png = ClipboardPasteboardFiles.pngData(fromFile: fileURL) else {
-                    await MainActor.run {
-                        FocusRestorer.log(
-                            "clipboard: failed to read image file \(fileURL.lastPathComponent)"
-                        )
-                    }
-                    return
-                }
-                await self?.insertImage(pngData: png, persist: true)
-            }
+            assert(!ClipboardImagePolicy.storesOwnedBlob(hasDurableImageFileURL: true))
+            insertImagePointer(path: fileURL.path, persist: true)
             return
         }
 
@@ -395,6 +419,7 @@ final class ClipboardStore: ObservableObject {
         if let type = pb.availableType(from: [.png, .tiff]),
            let data = pb.data(forType: type)
         {
+            assert(ClipboardImagePolicy.storesOwnedBlob(hasDurableImageFileURL: false))
             let isPNG = type == .png
             Task.detached(priority: .utility) { [weak self] in
                 let png: Data?
@@ -452,6 +477,41 @@ final class ClipboardStore: ObservableObject {
         return true
     }
 
+    /// Unowned Finder-style pointer — references the file where it lies.
+    @discardableResult
+    private func insertImagePointer(path: String, persist: Bool) -> ClipboardItem? {
+        let standardized = URL(fileURLWithPath: path).standardizedFileURL.path
+        guard !standardized.isEmpty else { return nil }
+
+        if let index = items.firstIndex(where: {
+            $0.kind == .image && $0.imagePath.map {
+                URL(fileURLWithPath: $0).standardizedFileURL.path
+            } == standardized
+        }) {
+            let existing = items.remove(at: index)
+            items.insert(existing, at: 0)
+            if persist { schedulePersist() }
+            return existing
+        }
+
+        let name = URL(fileURLWithPath: standardized).lastPathComponent
+        let item = ClipboardItem(
+            kind: .image,
+            text: name,
+            imagePath: standardized,
+            createdAt: Date()
+        )
+        items.insert(item, at: 0)
+        trimToMaxItems()
+        FocusRestorer.log(
+            "clipboard: captured image pointer \(name) history=\(items.count) owned=\(ownedImageCount)"
+        )
+        if persist {
+            schedulePersist()
+        }
+        return item
+    }
+
     @discardableResult
     private func insertImage(pngData: Data, persist: Bool) -> ClipboardItem? {
         guard let imagesDirectoryURL else {
@@ -473,6 +533,7 @@ final class ClipboardStore: ObservableObject {
             return nil
         }
 
+        // Owned blob: empty `text` so preview stays "Image" (UUID.png is noise).
         let item = ClipboardItem(
             kind: .image,
             text: "",
@@ -483,7 +544,7 @@ final class ClipboardStore: ObservableObject {
         enforceImageCap()
         trimToMaxItems()
         FocusRestorer.log(
-            "clipboard: captured image (\(pngData.count) bytes) history=\(items.count) images=\(imageCount)"
+            "clipboard: captured owned image (\(pngData.count) bytes) history=\(items.count) owned=\(ownedImageCount)"
         )
         if persist {
             schedulePersist()
@@ -491,14 +552,18 @@ final class ClipboardStore: ObservableObject {
         return item
     }
 
-    private var imageCount: Int {
-        items.reduce(0) { $0 + ($1.kind == .image ? 1 : 0) }
+    private var ownedImageCount: Int {
+        items.reduce(0) { count, item in
+            let owned = ownsImage(item)
+            guard ClipboardImagePolicy.countsTowardImageCap(isOwnedBlob: owned) else { return count }
+            return count + 1
+        }
     }
 
-    /// Drop oldest image rows when over the soft cap; delete their owned blobs.
+    /// Drop oldest *owned* image rows when over the soft cap; never delete user files.
     private func enforceImageCap() {
-        while imageCount > maxImages {
-            guard let index = items.lastIndex(where: { $0.kind == .image }) else { break }
+        while ownedImageCount > maxImages {
+            guard let index = items.lastIndex(where: { ownsImage($0) }) else { break }
             let removed = items.remove(at: index)
             deleteOwnedImage(removed)
         }

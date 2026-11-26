@@ -29,7 +29,7 @@ Agents: follow this doc together with [`AGENTS.md`](../AGENTS.md) rule **12** (c
 
 | Layer | Where | Examples |
 | --- | --- | --- |
-| **Unit** | Focused pure suites | `Countdown.parse` / `CommandLock.uniqueCompletion`, `IntentionScore`, `CountdownIslandLayout` / `Drag`, `Calculator.evaluate`, `UpdateSigning.verify`, `PanelFocusPolicy`, `WindowSnap` frame math alone |
+| **Unit** | Focused pure suites | `Countdown.parse` / `CommandLock.uniqueCompletion`, `IntentionScore`, `CountdownIslandLayout` / `Drag`, `Calculator.evaluate`, `UpdateSigning.verify`, `PanelFocusPolicy`, `LaunchHandoffPlan`, `ClipboardImagePolicy`, `WindowSnap` frame math alone |
 | **Integration** | Same XCTest target; compose ≥2 modules or I/O boundary | See below — **first-class**, not “rare” |
 | **Manual smoke** | Human / `./dev-install.sh` | Launcher show/hide, island hover × + drag feel, Accessibility grants, notarization, Homebrew cask fetch |
 
@@ -99,6 +99,8 @@ If the change is a one-line copy tweak or pure docs, skip the ceremony. If the c
 | Countdown | `Countdown`, `CountdownIslandLayout`, `CountdownIslandDrag` | Parse/lead/hint, compact size, centered label, overlay badge, grab-offset invariance |
 | Updates | `UpdateSigning`, `UpdateCheck` feed decode | Fail-closed missing fields; Ed25519 with ephemeral keys |
 | Focus / panels (policy) | `PanelFocusPolicy` | Restore / activate rules without opening windows |
+| App launch handoff | `LaunchHandoffPlan` | Dismiss before launch; no completion wait; no focus restore |
+| Clipboard images | `ClipboardImagePolicy` | Finder → path pointer; paste fileURL not PNG; soft-cap owned only |
 | Window snap math | `WindowSnap` (pure helpers) | Frame math where extracted |
 | Zoxide / expander / toggles | parsers & path helpers | Grammar and path resolution without requiring live CLI when possible |
 

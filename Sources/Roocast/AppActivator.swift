@@ -15,8 +15,12 @@ import ApplicationServices
 enum AppActivator {
 
     /// If the app at `appPath` is already running, activate + restore its
-    /// windows. Otherwise launch it normally.
-    static func activateOrLaunch(appPath: String) {
+    /// windows. Otherwise fire-and-forget `openApplication` (Tinycast-style —
+    /// do not wait for launch completion; caller already dismissed the panel).
+    static func activateOrLaunch(
+        appPath: String,
+        allowsRunningApplicationSubstitution: Bool = false
+    ) {
         let bundleID = Bundle(url: URL(fileURLWithPath: appPath))?.bundleIdentifier
         log("activateOrLaunch path=\(appPath) bundleID=\(bundleID ?? "nil")")
 
@@ -25,9 +29,12 @@ enum AppActivator {
             return
         }
 
-        log("no running instance — falling back to NSWorkspace.open")
+        log("no running instance — fire-and-forget openApplication")
         let url = URL(fileURLWithPath: appPath)
-        NSWorkspace.shared.open(url)
+        let config = NSWorkspace.OpenConfiguration()
+        config.allowsRunningApplicationSubstitution = allowsRunningApplicationSubstitution
+        // No completion handler: LaunchHandoffPlan.awaitsLaunchCompletion == false.
+        NSWorkspace.shared.openApplication(at: url, configuration: config)
     }
 
     /// Activate a running app and bring its windows out of the Dock / off-screen.
