@@ -78,9 +78,9 @@ final class AppLauncherTests: XCTestCase {
     }
 
     func testAppVersionString() {
-        XCTAssertEqual(AppVersion.string, "0.11.0")
+        XCTAssertEqual(AppVersion.string, "0.14.0")
         XCTAssertEqual(AppVersion.major, 0)
-        XCTAssertEqual(AppVersion.minor, 11)
+        XCTAssertEqual(AppVersion.minor, 14)
         XCTAssertEqual(AppVersion.patch, 0)
     }
 

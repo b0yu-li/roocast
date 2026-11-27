@@ -3,10 +3,10 @@ import Foundation
 // Auto-generated version file
 struct AppVersion {
     static let major = 0
-    static let minor = 13
+    static let minor = 14
     static let patch = 0
     /// Monotonic build stamped into CFBundleVersion (was hard-coded 1).
-    static let build = 2
+    static let build = 3
 
     static var string: String {
         "\(major).\(minor).\(patch)"
