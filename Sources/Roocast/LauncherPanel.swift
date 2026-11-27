@@ -5,6 +5,7 @@ final class LauncherPanel: FloatingPanel {
     let navigationState: NavigationState
     let menuModel = LauncherActionsModel()
     let rankPreferences = SearchRankPreferences()
+    let usageRanking = UsageRankingStore()
     let searchSession = SearchSession()
     /// AppDelegate owns the island so it survives launcher hide.
     var onCountdown: ((Int) -> Void)?
@@ -23,6 +24,7 @@ final class LauncherPanel: FloatingPanel {
                 navigationState: navigationState,
                 menuModel: menuModel,
                 rankPreferences: rankPreferences,
+                usageRanking: usageRanking,
                 onDismiss: { [weak self] restoreFocus in
                     // App handoff: LaunchHandoffPlan.restoreFocus == false (target activates itself).
                     self?.hide(restoreFocus: restoreFocus)

@@ -3,7 +3,6 @@ import SwiftUI
 /// Layout constants for the launcher ⌘K actions menu.
 enum LauncherMenuLayout {
     static let menuWidth: CGFloat = 260
-    static let headerHeight: CGFloat = 48
 }
 
 /// One entry in the launcher row's actions menu (⌘K).

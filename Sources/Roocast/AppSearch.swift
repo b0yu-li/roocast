@@ -184,13 +184,15 @@ enum AppSearch {
     /// - Parameter selfPath: Bundle path of Roocast itself — always excluded from
     ///   app rows (empty switch + typed search). Quit Roocast still matches as a command.
     /// - Parameter demoteLevels: Persisted Decrease Ranking levels keyed by `AppItem.id`.
+    /// - Parameter usage: On-device frecent snapshot; nil treats every row as unused.
     nonisolated static func results(
         query: String,
         apps: [AppItem],
         folders: [AppItem]? = nil,
         frontmostPath: String? = nil,
         selfPath: String? = nil,
-        demoteLevels: [UUID: Int] = [:]
+        demoteLevels: [UUID: Int] = [:],
+        usage: UsageRankingStore.Snapshot? = nil
     ) -> [AppItem] {
         let appsExcludingSelf = excludingSelf(apps, selfPath: selfPath)
         let lowered = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -199,7 +201,8 @@ enum AppSearch {
                 apps: appsExcludingSelf,
                 frontmostPath: frontmostPath,
                 selfPath: selfPath,
-                demoteLevels: demoteLevels
+                demoteLevels: demoteLevels,
+                usage: usage
             )
         }
 
@@ -266,12 +269,20 @@ enum AppSearch {
         if matchesMoveToRightCommand(lowered) {
             builtIns.append(.moveToRight)
         }
-        output.append(contentsOf: rank(query: lowered, apps: builtIns, demoteLevels: demoteLevels))
+        output.append(
+            contentsOf: rank(
+                query: lowered,
+                apps: builtIns,
+                demoteLevels: demoteLevels,
+                usage: usage
+            )
+        )
         output.append(
             contentsOf: rank(
                 query: lowered,
                 apps: appsExcludingSelf + folderItems,
-                demoteLevels: demoteLevels
+                demoteLevels: demoteLevels,
+                usage: usage
             )
         )
         return output
@@ -284,12 +295,14 @@ enum AppSearch {
         return apps.filter { AppIndex.canonicalPath($0.path) != selfCanon }
     }
 
-    /// Rank items by intention score (prefix > mid-string); ties break by name.
-    /// Demote levels subtract `demotePenaltyPerLevel` each so user-demoted rows sink.
+    /// Rank items by intention + usage boost; ties break by name.
+    /// Demote levels subtract `demotePenaltyPerLevel` each so user-demoted rows sink
+    /// even after frecent/term boosts.
     nonisolated static func rank(
         query: String,
         apps: [AppItem],
-        demoteLevels: [UUID: Int] = [:]
+        demoteLevels: [UUID: Int] = [:],
+        usage: UsageRankingStore.Snapshot? = nil
     ) -> [AppItem] {
         let lowered = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !lowered.isEmpty else { return [] }
@@ -298,9 +311,11 @@ enum AppSearch {
             .compactMap { app -> (AppItem, Int)? in
                 let base = IntentionScore.score(query: lowered, app: app)
                 guard base > 0 else { return nil }
+                let signals = usage?.usage(for: app.id) ?? .unused
+                let boost = UsageRanking.scoreBoost(query: lowered, usage: signals)
                 let demote = max(0, demoteLevels[app.id] ?? 0)
                 // Penalty may go negative — item still appears; sort sinks it.
-                return (app, base - demote * demotePenaltyPerLevel)
+                return (app, base + boost - demote * demotePenaltyPerLevel)
             }
             .sorted { lhs, rhs in
                 if lhs.1 != rhs.1 { return lhs.1 > rhs.1 }
@@ -309,12 +324,13 @@ enum AppSearch {
             .map(\.0)
     }
 
-    /// Empty-summon list: running apps ranked by switch intention.
+    /// Empty-summon list: running apps ranked by switch intention + frecent.
     nonisolated static func switchSuggestions(
         apps: [AppItem],
         frontmostPath: String? = nil,
         selfPath: String? = nil,
-        demoteLevels: [UUID: Int] = [:]
+        demoteLevels: [UUID: Int] = [:],
+        usage: UsageRankingStore.Snapshot? = nil
     ) -> [AppItem] {
         apps
             .compactMap { app -> (AppItem, Int)? in
@@ -324,8 +340,10 @@ enum AppSearch {
                     selfPath: selfPath
                 )
                 guard base > 0 else { return nil }
+                let signals = usage?.usage(for: app.id) ?? .unused
+                let boost = UsageRanking.switchBoost(usage: signals)
                 let demote = max(0, demoteLevels[app.id] ?? 0)
-                return (app, base - demote * demotePenaltyPerLevel)
+                return (app, base + boost - demote * demotePenaltyPerLevel)
             }
             .sorted { lhs, rhs in
                 if lhs.1 != rhs.1 { return lhs.1 > rhs.1 }

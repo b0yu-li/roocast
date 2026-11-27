@@ -29,7 +29,7 @@ Agents: follow this doc together with [`AGENTS.md`](../AGENTS.md) rule **12** (c
 
 | Layer | Where | Examples |
 | --- | --- | --- |
-| **Unit** | Focused pure suites | `Countdown.parse` / `CommandLock.uniqueCompletion`, `IntentionScore`, `CountdownIslandLayout` / `Drag`, `Calculator.evaluate`, `UpdateSigning.verify`, `PanelFocusPolicy`, `LaunchHandoffPlan`, `ClipboardImagePolicy`, `WindowSnap` frame math alone |
+| **Unit** | Focused pure suites | `Countdown.parse` / `CommandLock.uniqueCompletion`, `IntentionScore`, `UsageRanking`, `CountdownIslandLayout` / `Drag`, `Calculator.evaluate`, `UpdateSigning.verify`, `PanelFocusPolicy`, `LaunchHandoffPlan`, `ClipboardImagePolicy`, `ActionsMenuPlacement`, `WindowSnap` frame math alone |
 | **Integration** | Same XCTest target; compose ≥2 modules or I/O boundary | See below — **first-class**, not “rare” |
 | **Manual smoke** | Human / `./dev-install.sh` | Launcher show/hide, island hover × + drag feel, Accessibility grants, notarization, Homebrew cask fetch |
 
@@ -64,7 +64,7 @@ We do **not** currently run UI snapshot or XCUITest suites in CI. Prefer extract
 
 When adding or changing these paths, add/extend integration tests (right file per table above):
 
-1. **Launcher search** — `AppSearch.results` + stubs (rank, built-ins, folders, demote)
+1. **Launcher search** — `AppSearch.results` + stubs (rank, built-ins, folders, demote, usage/frecent)
 2. **Countdown CLI** — lock chip → duration → ready lead (and unlock/clear)
 3. **Search demote** — `SearchRankPreferences` → `AppSearch.results`
 4. **Calculator lead** — expression beats weak app name match
@@ -93,7 +93,7 @@ If the change is a one-line copy tweak or pure docs, skip the ceremony. If the c
 
 | Area | Pure module / entry | Must cover |
 | --- | --- | --- |
-| Search ranking / demote | `IntentionScore`, `AppSearch`, `SearchRankPreferences` | Prefix vs substring, demote order, built-in commands |
+| Search ranking / demote | `IntentionScore`, `UsageRanking`, `AppSearch`, `SearchRankPreferences` | Prefix vs substring, frecent/term boost, demote order, built-in commands |
 | Calculator | `Calculator` | Ops, reject bare numbers / plain text |
 | Command lock | `CommandLock` | Unique prefix, compose query |
 | Countdown | `Countdown`, `CountdownIslandLayout`, `CountdownIslandDrag` | Parse/lead/hint, compact size, centered label, overlay badge, grab-offset invariance |
@@ -101,6 +101,8 @@ If the change is a one-line copy tweak or pure docs, skip the ceremony. If the c
 | Focus / panels (policy) | `PanelFocusPolicy` | Restore / activate rules without opening windows |
 | App launch handoff | `LaunchHandoffPlan` | Dismiss before launch; no completion wait; no focus restore |
 | Clipboard images | `ClipboardImagePolicy` | Finder → path pointer; paste fileURL not PNG; soft-cap owned only |
+| ⌘K menu placement | `ActionsMenuPlacement` | Live viewport sizing (no const-height twitch); below/above clamp |
+| Smart Ranking | `UsageRanking`, `UsageRankingStore` | Frecent/terms; scoreBoost; AppSearch 1–2 char steer; demote still sinks |
 | Window snap math | `WindowSnap` (pure helpers) | Frame math where extracted |
 | Zoxide / expander / toggles | parsers & path helpers | Grammar and path resolution without requiring live CLI when possible |
 

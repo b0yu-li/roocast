@@ -167,7 +167,11 @@ final class AppIndex: ObservableObject {
         URL(fileURLWithPath: path).resolvingSymlinksInPath().path
     }
 
-    func search(_ query: String, demoteLevels: [UUID: Int] = [:]) -> [AppItem] {
+    func search(
+        _ query: String,
+        demoteLevels: [UUID: Int] = [:],
+        usage: UsageRankingStore.Snapshot? = nil
+    ) -> [AppItem] {
         // Zoxide mode: never spawn a process here — `filteredApps` runs during SwiftUI
         // body/layout. Sync `Process.waitUntilExit` nested the run loop and aborted
         // AttributeGraph (see Roocast-2026-10-22-110706.ips). Results come from
@@ -191,7 +195,8 @@ final class AppIndex: ObservableObject {
             apps: apps,
             frontmostPath: frontmostPath,
             selfPath: Self.canonicalPath(Bundle.main.bundlePath),
-            demoteLevels: demoteLevels
+            demoteLevels: demoteLevels,
+            usage: usage
         )
     }
 

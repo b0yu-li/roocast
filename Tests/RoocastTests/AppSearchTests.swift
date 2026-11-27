@@ -427,4 +427,102 @@ final class AppSearchTests: XCTestCase {
         let ranked = AppSearch.switchSuggestions(apps: apps)
         XCTAssertEqual(ranked.first?.name, "Notes")
     }
+
+    // MARK: - Smart Ranking (usage)
+
+    /// North star: 1-char query prefers the app habitually opened with that term.
+    func testUsageTermHitSteersOneCharPrefixAmongPeers() {
+        let finder = AppItem.stub(name: "Finder", path: "/System/Library/CoreServices/Finder.app")
+        let firefox = AppItem.stub(name: "Firefox", path: "/Applications/Firefox.app")
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let visit = UsageRanking.applyingVisit(previous: nil, query: "f", at: now)
+        let usage = UsageRankingStore.Snapshot(
+            visits: [firefox.id.uuidString: visit],
+            now: now
+        )
+
+        let without = AppSearch.results(
+            query: "f",
+            apps: [finder, firefox],
+            folders: []
+        )
+        // Built-ins also match "f"; assert among app peers only.
+        let withoutApps = without.filter { $0.kind == .app }
+        // Shorter name prefix: Finder before Firefox without usage.
+        XCTAssertEqual(withoutApps.first?.name, "Finder")
+
+        let with = AppSearch.results(
+            query: "f",
+            apps: [finder, firefox],
+            folders: [],
+            usage: usage
+        )
+        let withApps = with.filter { $0.kind == .app }
+        XCTAssertEqual(withApps.first?.name, "Firefox")
+    }
+
+    func testUsageDemoteStillSinksHabitualApp() {
+        let notes = AppItem.stub(name: "Notes", path: "/Applications/Notes.app")
+        let notebook = AppItem.stub(name: "Notebook", path: "/Applications/Notebook.app")
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        var visit: UsageVisit?
+        for i in 0..<5 {
+            visit = UsageRanking.applyingVisit(
+                previous: visit,
+                query: "no",
+                at: now.addingTimeInterval(TimeInterval(i))
+            )
+        }
+        let usage = UsageRankingStore.Snapshot(
+            visits: [notes.id.uuidString: visit!],
+            now: now.addingTimeInterval(10)
+        )
+
+        let boosted = AppSearch.results(
+            query: "no",
+            apps: [notes, notebook],
+            folders: [],
+            usage: usage
+        )
+        XCTAssertEqual(boosted.first?.name, "Notes")
+
+        let demoted = AppSearch.results(
+            query: "no",
+            apps: [notes, notebook],
+            folders: [],
+            demoteLevels: [notes.id: 1],
+            usage: usage
+        )
+        XCTAssertEqual(demoted.first?.name, "Notebook")
+        XCTAssertEqual(demoted.map(\.name), ["Notebook", "Notes"])
+    }
+
+    func testSwitchSuggestionsPreferFrecentRunningApp() {
+        let slack = AppItem.stub(
+            name: "Slack",
+            path: "/Applications/Slack.app",
+            isRunning: true
+        )
+        let zoom = AppItem.stub(
+            name: "Zoom",
+            path: "/Applications/Zoom.app",
+            isRunning: true
+        )
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        var visit: UsageVisit?
+        for i in 0..<3 {
+            visit = UsageRanking.applyingVisit(
+                previous: visit,
+                query: nil,
+                at: now.addingTimeInterval(TimeInterval(i))
+            )
+        }
+        let usage = UsageRankingStore.Snapshot(
+            visits: [zoom.id.uuidString: visit!],
+            now: now.addingTimeInterval(10)
+        )
+
+        let ranked = AppSearch.switchSuggestions(apps: [slack, zoom], usage: usage)
+        XCTAssertEqual(ranked.first?.name, "Zoom")
+    }
 }

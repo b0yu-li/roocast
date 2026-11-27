@@ -16,6 +16,7 @@ struct ContentView: View {
     @ObservedObject var navigationState: NavigationState
     @ObservedObject var menuModel: LauncherActionsModel
     @ObservedObject var rankPreferences: SearchRankPreferences
+    @ObservedObject var usageRanking: UsageRankingStore
     @StateObject private var appIndex = AppIndex()
     @FocusState private var isSearchFocused: Bool
     /// Hide the launcher. `restoreFocus` is false for app handoff (target activates itself).
@@ -26,7 +27,13 @@ struct ContentView: View {
     var onCountdown: ((Int) -> Void)? = nil
 
     var filteredApps: [AppItem] {
-        appIndex.search(searchSession.searchQuery, demoteLevels: rankPreferences.demoteLevels)
+        // `usageRanking.revision` keeps this live after visits.
+        _ = usageRanking.revision
+        return appIndex.search(
+            searchSession.searchQuery,
+            demoteLevels: rankPreferences.demoteLevels,
+            usage: usageRanking.snapshot()
+        )
     }
 
     private var fieldText: Binding<String> {
@@ -46,12 +53,6 @@ struct ContentView: View {
 
     private var menuHeight: CGFloat {
         48 + CGFloat(menuModel.actions.count) * 30
-    }
-
-    private var listViewportHeight: CGFloat {
-        LauncherLayout.height
-            - LauncherMenuLayout.headerHeight
-            - LauncherLayout.footerHeight
     }
 
     var body: some View {
@@ -116,6 +117,9 @@ struct ContentView: View {
             navigationState.updateBounds(itemCount: filteredApps.count)
         }
         .onChange(of: rankPreferences.demoteLevels) { _, _ in
+            navigationState.updateBounds(itemCount: filteredApps.count)
+        }
+        .onChange(of: usageRanking.revision) { _, _ in
             navigationState.updateBounds(itemCount: filteredApps.count)
         }
         .environmentObject(navigationState)
@@ -231,27 +235,6 @@ struct ContentView: View {
                 actionsMenuOverlay
             }
         }
-        // DIAG: prove ⌘K twitch — overlay fixed height vs live results area.
-        .background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear {
-                        FocusRestorer.log(
-                            "actionsMenu diag: resultsArea.h=\(geo.size.height) overlayConst=\(listViewportHeight) headerConst=\(LauncherMenuLayout.headerHeight) menuOpen=\(menuModel.isOpen)"
-                        )
-                    }
-                    .onChange(of: geo.size.height) { _, h in
-                        FocusRestorer.log(
-                            "actionsMenu diag: resultsArea.h changed → \(h) overlayConst=\(listViewportHeight) menuOpen=\(menuModel.isOpen)"
-                        )
-                    }
-                    .onChange(of: menuModel.isOpen) { _, open in
-                        FocusRestorer.log(
-                            "actionsMenu diag: isOpen=\(open) resultsArea.h=\(geo.size.height) overlayConst=\(listViewportHeight) delta=\(geo.size.height - listViewportHeight)"
-                        )
-                    }
-            }
-        )
     }
 
     /// Raycast-style hint row: primary action + Actions ⌘K.
@@ -293,30 +276,30 @@ struct ContentView: View {
     }
 
     /// The actions menu, anchored below the selected row (above if it would
-    /// run past the fold), clamped inside the list's viewport.
+    /// run past the fold), clamped inside the *live* list viewport.
+    ///
+    /// Must fill the results ZStack — a constant-derived height (panel −
+    /// headerConst − footer) was 1pt taller than the measured area and
+    /// twitched the list on every ⌘K toggle (`ActionsMenuPlacement`).
     @ViewBuilder
     private var actionsMenuOverlay: some View {
-        let anchor = menuModel.anchorFrame
-        let listHeight = listViewportHeight
-        let belowCenter = anchor.maxY + 6 + menuHeight / 2
-        let aboveCenter = anchor.minY - 6 - menuHeight / 2
-        let useBelow = belowCenter + menuHeight / 2 <= listHeight || aboveCenter - menuHeight / 2 < 0
-        let centerX = min(
-            max(anchor.midX, LauncherMenuLayout.menuWidth / 2 + 8),
-            LauncherLayout.width - LauncherMenuLayout.menuWidth / 2 - 8
-        )
-        let centerY = min(
-            max(useBelow ? belowCenter : aboveCenter, menuHeight / 2 + 8),
-            listHeight - menuHeight / 2 - 8
-        )
-        ZStack(alignment: .topLeading) {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { menuModel.close() }
-            LauncherActionsMenuView(model: menuModel)
-                .position(x: centerX, y: centerY)
+        GeometryReader { geo in
+            let center = ActionsMenuPlacement.center(
+                anchor: menuModel.anchorFrame,
+                menuWidth: LauncherMenuLayout.menuWidth,
+                menuHeight: menuHeight,
+                viewport: geo.size
+            )
+            ZStack(alignment: .topLeading) {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { menuModel.close() }
+                LauncherActionsMenuView(model: menuModel)
+                    .position(x: center.x, y: center.y)
+            }
         }
-        .frame(width: LauncherLayout.width, height: listHeight)
+        // Fill live results area — never `.frame(height: listViewportHeight)`.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Behavior
@@ -353,6 +336,16 @@ struct ContentView: View {
         }
     }
 
+    /// Typed query for usage recording — nil when empty-summon / no search text.
+    private var usageQuery: String? {
+        let q = searchSession.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        return q.isEmpty ? nil : q
+    }
+
+    private func recordUsage(for app: AppItem) {
+        usageRanking.visit(itemID: app.id, query: usageQuery)
+    }
+
     private func launchSelectedApp() {
         guard !filteredApps.isEmpty else { return }
         guard navigationState.selectedIndex < filteredApps.count else { return }
@@ -360,6 +353,7 @@ struct ContentView: View {
         let app = filteredApps[navigationState.selectedIndex]
 
         if case .calculator(let copyText) = app.kind {
+            recordUsage(for: app)
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(copyText, forType: .string)
             searchSession.clear()
@@ -368,6 +362,7 @@ struct ContentView: View {
         }
 
         if case .countdown(let seconds) = app.kind {
+            recordUsage(for: app)
             searchSession.clear()
             onCountdown?(seconds)
             onDismiss(false)
@@ -380,12 +375,14 @@ struct ContentView: View {
         }
 
         if app.kind == .quit {
+            recordUsage(for: app)
             searchSession.clear()
             NSApplication.shared.terminate(nil)
             return
         }
 
         if app.kind == .checkForUpdates {
+            recordUsage(for: app)
             searchSession.clear()
             onDismiss(false)
             Task { @MainActor in
@@ -396,6 +393,7 @@ struct ContentView: View {
         }
 
         if app.kind == .uninstall {
+            recordUsage(for: app)
             searchSession.clear()
             onDismiss(false)
             UninstallRoocast.run()
@@ -403,76 +401,91 @@ struct ContentView: View {
         }
 
         if app.kind == .leftHalf {
+            recordUsage(for: app)
             searchSession.clear()
             onWindowSnap?(.left)
             return
         }
 
         if app.kind == .rightHalf {
+            recordUsage(for: app)
             searchSession.clear()
             onWindowSnap?(.right)
             return
         }
 
         if app.kind == .maximize {
+            recordUsage(for: app)
             searchSession.clear()
             onWindowSnap?(.maximize)
             return
         }
 
         if app.kind == .reasonableSize {
+            recordUsage(for: app)
             searchSession.clear()
             onWindowSnap?(.reasonableSize)
             return
         }
 
         if app.kind == .topHalf {
+            recordUsage(for: app)
             searchSession.clear()
             onWindowSnap?(.top)
             return
         }
 
         if app.kind == .bottomHalf {
+            recordUsage(for: app)
             searchSession.clear()
             onWindowSnap?(.bottom)
             return
         }
 
         if app.kind == .firstThird {
+            recordUsage(for: app)
             searchSession.clear()
             onWindowSnap?(.firstThird)
             return
         }
 
         if app.kind == .lastTwoThirds {
+            recordUsage(for: app)
             searchSession.clear()
             onWindowSnap?(.lastTwoThirds)
             return
         }
 
         if app.kind == .moveToTop {
+            recordUsage(for: app)
             searchSession.clear()
             onWindowSnap?(.moveToTop)
             return
         }
 
         if app.kind == .moveToBottom {
+            recordUsage(for: app)
             searchSession.clear()
             onWindowSnap?(.moveToBottom)
             return
         }
 
         if app.kind == .moveToLeft {
+            recordUsage(for: app)
             searchSession.clear()
             onWindowSnap?(.moveToLeft)
             return
         }
 
         if app.kind == .moveToRight {
+            recordUsage(for: app)
             searchSession.clear()
             onWindowSnap?(.moveToRight)
             return
         }
+
+        // Record before clear so the typed term steers future 1–2 char queries.
+        recordUsage(for: app)
 
         // Clear so the next open starts with an empty search field.
         searchSession.clear()

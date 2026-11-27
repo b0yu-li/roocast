@@ -13,8 +13,6 @@ enum ClipboardLayout {
 
 enum ClipboardMenuLayout {
     static let menuWidth: CGFloat = 260
-    static let listWidth: CGFloat = ClipboardLayout.listWidth
-    static let headerHeight: CGFloat = 54
 }
 
 struct ClipboardView: View {
@@ -302,38 +300,28 @@ struct ClipboardView: View {
         48 + CGFloat(ClipboardMenuAction.allCases.count) * 30
     }
 
-    private var listViewportHeight: CGFloat {
-        ClipboardLayout.height
-            - ClipboardMenuLayout.headerHeight
-            - ClipboardLayout.footerHeight
-    }
-
     /// The actions menu, anchored below the selected row (above if it would
-    /// run past the fold), clamped inside the list's viewport.
+    /// run past the fold), clamped inside the *live* list viewport.
+    /// Same rule as the launcher: fill the parent — never a constant height.
     @ViewBuilder
     private var actionsMenuOverlay: some View {
-        let anchor = menuModel.anchorFrame
-        let listHeight = listViewportHeight
-        let belowCenter = anchor.maxY + 6 + menuHeight / 2
-        let aboveCenter = anchor.minY - 6 - menuHeight / 2
-        let useBelow = belowCenter + menuHeight / 2 <= listHeight || aboveCenter - menuHeight / 2 < 0
-        let centerX = min(
-            max(anchor.midX, ClipboardMenuLayout.menuWidth / 2 + 8),
-            ClipboardMenuLayout.listWidth - ClipboardMenuLayout.menuWidth / 2 - 8
-        )
-        let centerY = min(
-            max(useBelow ? belowCenter : aboveCenter, menuHeight / 2 + 8),
-            listHeight - menuHeight / 2 - 8
-        )
-        ZStack(alignment: .topLeading) {
-            // Click-away backdrop — closes the menu without acting.
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { menuModel.close() }
-            ClipboardActionsMenuView(model: menuModel)
-                .position(x: centerX, y: centerY)
+        GeometryReader { geo in
+            let center = ActionsMenuPlacement.center(
+                anchor: menuModel.anchorFrame,
+                menuWidth: ClipboardMenuLayout.menuWidth,
+                menuHeight: menuHeight,
+                viewport: geo.size
+            )
+            ZStack(alignment: .topLeading) {
+                // Click-away backdrop — closes the menu without acting.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { menuModel.close() }
+                ClipboardActionsMenuView(model: menuModel)
+                    .position(x: center.x, y: center.y)
+            }
         }
-        .frame(width: ClipboardMenuLayout.listWidth, height: listHeight)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     /// In-panel confirmation for Delete All — no system modal, the panel never
